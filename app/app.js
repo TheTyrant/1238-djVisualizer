@@ -270,6 +270,9 @@ class DJVisualizerApp {
     // 03 Assets: asset bin + selected-asset properties (v2.1, D-44)
     this.assetPanel = new AssetPanel(this);
     this.assetPanel.init();
+    // Amount used + Sections editor (v2.4, D-82)
+    this.clipTools = new ClipTools(this);
+    this.clipTools.init();
 
     // Project file (.mnt): 03 Output › Project, Ctrl+S / Ctrl+Shift+S / Ctrl+O
     this.project.init();
@@ -277,7 +280,7 @@ class DJVisualizerApp {
     this.voice.on(() => this.project.markDirty());
     this.eq.on(() => { this.project.markDirty(); this.fastPass.reanalyseSoon(); });
     // A new tempo moves the grid: unplayed cuts follow it (D-81).
-    this.tempo.on(() => { this.project.markDirty(); this.fastPass.soon(60); });
+    this.tempo.on((why) => { if (why === 'edit') this.project.markDirty(); this.fastPass.soon(60); });
     ['input', 'change'].forEach(t => document.addEventListener(t, (e) => {
       if (e.target && e.target.closest && e.target.closest('#sidebar, #rightbar, .channels') && e.target.id !== 'projectName' && e.target.name !== 'projectMedia' && e.target.type !== 'file') this.project.markDirty();   // file pickers aren't edits (adding media marks dirty on its own)
     }, true));

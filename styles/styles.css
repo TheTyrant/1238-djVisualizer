@@ -1242,3 +1242,75 @@ button.menu-item:focus-visible, summary.menu-item:focus-visible { outline: 2px s
 :root[data-theme="dark"] .visualizer-container.is-framed .stage { box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.28); }
 
 .help-credit { margin-top: 10px; font: 10px/1.4 var(--font-mono); color: var(--ink-3); }
+
+/* ---- Clip model (v2.4 step 2, D-82) ---------------------------------- */
+/* Card: the time readout opens the amount used; Sections opens the editor. */
+button.bin-dur {
+  border: 1px solid transparent; background: transparent; padding: 0 3px; height: 16px; cursor: pointer;
+  font-family: var(--font-mono); font-size: 9px; color: var(--ink-3); white-space: nowrap;
+}
+button.bin-dur:hover, button.bin-dur:focus-visible { border-color: var(--line); color: var(--ink); }
+button.bin-dur.is-set { background: var(--ink); color: var(--paper); }
+.bin-tags { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.bin-tag-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bin-sect {
+  flex: none; height: 15px; padding: 0 4px; border: 1px solid var(--line); background: transparent; color: var(--ink);
+  font-family: var(--font-mono); font-size: 8px; letter-spacing: 0.06em; text-transform: uppercase; cursor: pointer;
+}
+.bin-sect:hover, .bin-sect:focus-visible { background: var(--ink); color: var(--paper); }
+.asset-row.is-section { padding-left: 18px; grid-template-columns: 26px 1fr auto; }
+.asset-row.is-section .asset-thumb { width: 26px; height: 18px; }
+
+/* Clip options: speed presets, Fit to bars */
+.speed-btns button { padding: 0 2px; font-family: var(--font-mono); font-size: 12px; min-width: 0; }
+.fit-row { display: grid; grid-template-columns: 56px 1fr; gap: 6px; }
+.fit-row .btn { height: 26px; padding: 0 8px; }
+.prop-used { height: 26px; font-family: var(--font-mono); font-size: 11px; text-transform: none; letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Amount used popover */
+.clip-pop {
+  position: fixed; z-index: 900; width: 320px; padding: 10px 12px 12px;
+  display: flex; flex-direction: column; gap: 10px;
+  background: var(--paper); color: var(--ink); border: 1px solid var(--line); box-shadow: 4px 4px 0 var(--ink);
+}
+.clip-pop[hidden] { display: none; }
+.clip-pop-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.clip-pop-k { font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); flex: none; }
+.clip-pop-name { font-weight: 700; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.clip-pop-row { display: flex; gap: 8px; align-items: center; }
+.clip-pop-row label { flex: 1; display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; color: var(--ink-2); }
+.clip-pop-row input { width: 64px; min-width: 0; height: 26px; font-family: var(--font-mono); font-size: 12px; }
+.clip-pop-row .btn { flex: 1; height: 28px; }
+.clip-pop-note { margin: 0; font-family: var(--font-mono); font-size: 10px; line-height: 1.45; color: var(--ink-2); }
+/* Two handles on one track */
+.range2 { position: relative; height: 26px; border: 1px solid var(--line); background: var(--steel); }
+.range2-fill { position: absolute; top: 0; bottom: 0; background: var(--high); opacity: 0.55; }
+.range2 input[type="range"] {
+  position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0;
+  background: transparent; pointer-events: none; -webkit-appearance: none; appearance: none; border: none;
+}
+.range2 input[type="range"]::-webkit-slider-runnable-track { background: transparent; border: none; }
+.range2 input[type="range"]::-moz-range-track { background: transparent; border: none; }
+.range2 input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; pointer-events: auto; cursor: ew-resize;
+  width: 10px; height: 26px; background: var(--ink); border: 1px solid var(--paper);
+}
+.range2 input[type="range"]::-moz-range-thumb { pointer-events: auto; cursor: ew-resize; width: 10px; height: 24px; border-radius: 0; background: var(--ink); border: 1px solid var(--paper); }
+.range2 input[type="range"]:focus-visible { outline: 2px solid var(--high); outline-offset: 2px; }
+
+/* Sections editor */
+.sect-overlay { position: fixed; inset: 0; z-index: 950; display: flex; align-items: center; justify-content: center; background: var(--surface-glass-2); }
+.sect-panel {
+  width: min(1010px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto;
+  display: flex; flex-direction: column; gap: 10px; padding: 18px 22px;
+  background: var(--paper); color: var(--ink); border: 2px solid var(--line); box-shadow: 8px 8px 0 var(--ink);
+}
+.sect-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sect-head h3 { margin: 0; font-size: 16px; font-weight: 800; text-transform: uppercase; }
+.sect-name { font-weight: 600; text-transform: none; margin-left: 6px; }
+.sect-bar { font-family: var(--font-mono); font-size: 10px; color: var(--ink-2); }
+.sect-canvas { width: 100%; height: auto; display: block; touch-action: none; }
+.sect-list { margin: 0; padding: 0 0 0 18px; font-family: var(--font-mono); font-size: 11px; line-height: 1.7; }
+.sect-list .hint { list-style: none; margin-left: -18px; }
+.sect-foot { display: flex; justify-content: flex-end; gap: 8px; }
+.sect-foot .btn { height: 30px; padding: 0 16px; }

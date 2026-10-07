@@ -31,6 +31,7 @@ app/
   tempoGrid.js             Fixed tempo grid { bpm, offset, source } for track mode (D-81)
   fastPass.js              Fast pass: whole-song offline analysis through the frozen AudioProcessor; fills record + cut list (D-80)
   tempoPanel.js            Header TEMPO readout/menu + fast-pass progress row in the Status overlay (D-80, D-81)
+  clipTools.js             Amount-used range popover + Sections editor (filmstrip over a bar ruler) (D-82)
   mediaLibrary.js          Linked-media fingerprints, remembered file handles (IndexedDB), reconnect by folder / files
   projectFile.js           .mnt project files: save / open / restore / reconnect / pack media
   zip64.js                 ZIP64 writer (streamed, stored) + reader (index only, slices); TempDisk (OPFS) for Firefox saves / exports (D-66)
@@ -49,6 +50,7 @@ tests/
   run.js                   Headless runner (puppeteer-core + installed Chrome/Edge): node tests/run.js tests/<file>.js
   alpha-open.js            An alpha (format 1) project opens with the same cuts, settings and frames (fixtures/alpha-v1.mnt)
   fastpass.js              Step 1: fast pass, tempo grid, ×2/÷2/type-in, played-wins, refill, cancel, never-played export
+  clipmodel.js             Step 2: amount used, sections, speed, Fit to bars, export frames + pitch, save/reopen, Sections editor by mouse
 test-assets/
   generate.html            Makes labelled test clips (WebM) + a 120 BPM test track (WAV) in-browser
 docs/
@@ -312,6 +314,17 @@ Tokens in `:root`: `--surface #EDEAE4 · --panel #E3DFD7 · --steel #D7DADC · -
 
 ### 3.7k `app/tempoGrid.js` — `class TempoGrid` — ✅ *(v2.4, D-81)*
 `bpm`, `offset` (bar 1), `source` (median / manual / live); `active` (track mode, not live); `beatAt(t)`, `timeOfBeat(b)`, `beatsIn(t0, t1)`; `detect()`, `scale()`, `type()`, `tap()`, `useLive()`, `useDetected()`; `toJSON()` / `fromJSON()` (no tempo = alpha project = live). `ClipEngine.grid` points at it: `updateOnGrid()` / `alignToGrid()` schedule cuts on it, and `ClipEngine.dry` skips all media calls. `app/tempoPanel.js` is its header menu.
+
+### 3.7l Clip model in `app/clipEngine.js` + `app/clipTools.js` — ✅ *(v2.4 step 2, D-82)*
+| Member | Role |
+|---|---|
+| `ClipEngine.clipDefaults()` | `used {start,end}`, `speed`, `sections`, `fitBars` — defaults = whole clip at 1× |
+| `usedRange(a)` / `usedLength` / `sourceLength` / `speedOf` / `screenLength` | Read the model (a section reads its parent's media) |
+| `setUsed()` / `setSpeed()` / `fitToBars(id, barSec, bars)` | Edits; Fit sets pace `'fit'` (hold = `fitBars` bars, in-point = used start) |
+| `setSections(id, times)` / `addSection()` / `sectionsOf()` / `sectionBounds()` / `isSplit()` / `mediaAssets` | Child clips with accessors to the parent's `file / el / media / ready …`; a split parent leaves `clips` |
+| `ClipEngine.rate(el, sp)` / `keepInRange()` | Live playback rate (pitch follows) and looping inside the used part |
+| Segments | `speed`, `range` recorded per cut; `OfflineRenderer.clipTime()` = in + elapsed × speed, wrapped in `range`; story sound resampled in `mixChunk` (`rate`) |
+| `ClipTools.openRange(a, anchor)` / `openSections(a)` / `barSource(a)` / `filmstrip(p)` | UI: range popover; Sections overlay (canvas: filmstrip, bar ruler, markers) |
 
 ### 3.11 Invariants
 1. `audioProcessor.js` is never modified. *(v2.4: the fast pass drives a second instance with simulated inputs; it never patches the class.)*

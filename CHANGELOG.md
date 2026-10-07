@@ -6,6 +6,9 @@ Built on branch `v2.4`. Installs beside the alpha with its own settings.
 ### Added
 - **BSSMNT Stable05** installs next to the alpha (demoV2) with its own shortcuts, settings, recent list and crash recordings. The label shows in the window title and the help panel.
 - **Fast pass:** a loaded song is analysed in a few seconds (progress and Cancel in the Status overlay). The whole song gets motion and cuts before you press play; what you play replaces them as you go. **Refill from fast pass** (TEMPO menu) replaces what you played.
+- **Amount used:** click a clip card's time to choose the part of the clip the Auto-Editor may use (e.g. 0:20–0:32). Locked clips play exactly that part.
+- **Sections:** split a clip on bar markers in a filmstrip editor (click to add, drag to snap to bars, right-click to delete). Each section gets its own card, with its own pace, band, speed and lock, and the video isn't copied.
+- **Speed:** ¼× to 4× per clip or section (presets or a number), with the clip's sound changing pitch to match, live and in the export. **Fit to bars** sets the speed so the used part fills exactly N bars.
 - **Fixed tempo grid:** in track mode, cuts follow one grid from 0:00, the same every time the song loads — no more "Listening for tempo…". The header shows the tempo ("97 BPM · median"). Use ÷2, ×2, type a tempo, Tap (or **T**), Detected, or Live clock (the old behaviour).
 
 ### Changed

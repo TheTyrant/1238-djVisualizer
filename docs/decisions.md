@@ -492,6 +492,25 @@ The brief's four questions were not answered before the build. Rather than guess
 - **Alpha projects keep the live clock** *(Proposed — needs Omar)*: a project without `tempo` opens with source *live*, so it plays as before (rule 3). The detected grid still fills its unplayed parts, and one click on **Detected** switches it to the grid.
 - **Status overlay BPM** still shows the realtime detector; the TEMPO readout shows the grid. *Proposed — needs Omar.*
 
+
+### D-82 · Clip model: amount used, sections, speed, Fit to bars *(Accepted — built)*
+- **Amount used** (brief #1): each video has `used: { start, end }` (end `null` = to the end). Click a card's time readout (or **Used** in the clip's options) for a two-handle range with Start / Amount fields and **Whole clip**.
+  - The auto-editor only picks in-points inside it, and a regular clip loops inside it (live and in the export).
+  - A locked clip (Hook / Result / CTA) plays exactly this part, at its speed, capped by D-78.
+  - The card shows the used length, and "used→on screen" when the speed changes it. Status shows source → used → on screen.
+- **Sections** (brief #2): **Sections** on a card (or in the options) opens a filmstrip over a bar ruler. The ruler's bar is the fixed grid's bar (D-81) at the clip's speed, in clip seconds (120 BPM until a tempo is known).
+  - Click to add a marker on the nearest bar line, drag to move it (it snaps to bars), right-click to delete.
+  - Each section becomes a child card "Clip · 2/4" with its own Pace, Importance, band, speed, amount used and lock. Children read the parent's video, file and size; there is no copy, and the file is packed once.
+  - *Proposed — needs Omar:* while a clip has sections, its own card is replaced by the section cards (it stays in 03 Sound's list as the owner of the video, with the sections indented under it). "Remove all sections" brings the single card back.
+  - *Proposed — needs Omar (limitation):* live, two sections of the same video share one player, so a blend between them shows one picture (it reads as a jump cut). The export decodes them separately and blends correctly.
+- **Speed** (brief #12): presets ¼ ½ ¾ 1 1½ 2 4× plus a number field (0.25–4). On-screen length = used ÷ speed.
+  - The renderer maps `in + elapsed × speed` (frame-accurate) and wraps inside the used part. Each cut records its `speed` and `range`, so a later edit can't change what was played. Cuts recorded before v2.4 have neither and map exactly as before.
+  - The clip's own sound changes pitch with the speed (plain resample): live through `playbackRate` with `preservesPitch = false`, and in the mixdown through `AudioBufferSourceNode.playbackRate`. Measured: a 440 Hz tone at 1.5× exports at 660 Hz.
+- **Fit to bars:** `speed = used ÷ (bars × bar seconds)`. Bars is a whole number ≥ 1 (the nearest to the clip's length at 1× unless typed), and speed is kept within 0.25–4 (the bar count moves if needed).
+  - *Proposed — needs Omar:* Fit also sets the clip's Pace to **Fit: N bars**, so every time it's picked it plays its used part once from the start and holds exactly N bars. Without that, a regular clip would still hold for its Pace and "fills exactly N bars" would only hold for locked clips.
+  - Test: 0:00–0:12 into 4 bars at 120 BPM → 1.5×, every cut exactly 8 s, and the export shows source 1.5 / 6 / 10.5 s at 1 / 4 / 7 s. Locked as Hook, 3 bars = exactly 6 s, and 4 bars is held to the cap (7.5 s of a 30 s song).
+- **Old projects:** no `used` / `speed` / `sections` = whole clip at 1×, no sections (checked in `tests/alpha-open.js`).
+
 ## I. Known carry-overs (pre-existing on `main`, not changed)
 - Placeholder text drawn with `p.text()` in WebGL mode doesn't render, because no font is loaded (affects the Media Layers "Upload images…" prompt). v2 uses a DOM overlay for its own hints.
 - `visualizer.js` has duplicate `drawAudioWaves` / `drawMandala` / `drawTunnel` definitions (the later ones win), plus unused snake-game code.

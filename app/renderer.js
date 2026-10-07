@@ -127,7 +127,7 @@ class OfflineRenderer {
       : 'Live mode: no input recording for this session, so the export has no input sound.');
     const usesClips = this.modesUsed(frames).has('clips');
     if (usesClips && !edl.length) warnings.push('Clip Auto-Editor was on but no cuts were recorded.');
-    const offline = app.clipEngine.assets.filter(a => a.offline).length;
+    const offline = app.clipEngine.mediaAssets.filter(a => a.offline).length;
     if (offline) warnings.push(`${offline} media file(s) aren't connected: reconnect them in Project first.`);
     return { duration, played, recorded: recorded / SessionRecord.FPS, missing, cuts: edl.length, track, warnings, ok: duration > 0 && !offline };
   }
@@ -402,13 +402,18 @@ class OfflineRenderer {
     return { cur, out, progress };
   }
 
-  // Where in the clip file a cut is at master time t: playback runs from the
-  // in-point; regular clips loop, story clips play once and hold the end.
+  // Where in the clip file a cut is at master time t: in + elapsed × speed
+  // (D-82). Regular clips loop inside their used part (the whole file for
+  // cuts recorded before v2.4); story clips play once and hold the end.
   clipTime(seg, asset, t, dur) {
-    const ct = seg.inPoint + (t - seg.start);
+    const ct = seg.inPoint + (t - seg.start) * (seg.speed || 1);
     if (!(dur > 0)) return Math.max(0, ct);
-    if (seg.story) return Math.max(0, Math.min(ct, dur - 0.001));
-    return ((ct % dur) + dur) % dur;
+    const r0 = seg.range ? Math.max(0, seg.range[0]) : 0;
+    const r1 = seg.range ? Math.min(dur, seg.range[1]) : dur;
+    if (seg.story) return Math.max(0, Math.min(ct, r1 - 0.001));
+    const len = r1 - r0;
+    if (!(len > 0.001)) return Math.max(0, Math.min(ct, dur - 0.001));
+    return r0 + ((((ct - r0) % len) + len) % len);
   }
 
   async loadClipFrames(scene, t) {
@@ -581,7 +586,8 @@ class OfflineRenderer {
       if (!a || a.kind !== 'video' || !a.file) continue;
       if (!cache.has(a.id)) cache.set(a.id, await this.decode(a.file).catch(() => null));
       const buf = cache.get(a.id);
-      if (buf) parts.push({ buffer: buf, at: s.start, offset: s.inPoint, length: s.end - s.start, gain: 1 });
+      // Its sound at the clip's speed, resampled (pitch follows, D-82).
+      if (buf) parts.push({ buffer: buf, at: s.start, offset: s.inPoint, length: s.end - s.start, gain: 1, rate: s.speed || 1, until: s.range ? s.range[1] : null });
     }
     return parts;
   }
@@ -627,7 +633,8 @@ class OfflineRenderer {
         }
         continue;
       }
-      const len = Math.min(part.length != null ? part.length : Infinity, part.buffer.duration - part.offset);
+      const rate = part.rate || 1;
+      const len = Math.min(part.length != null ? part.length : Infinity, (Math.min(part.buffer.duration, part.until != null ? part.until : Infinity) - part.offset) / rate);
       const s0 = part.at, s1 = part.at + len;
       if (s1 <= a || s0 >= b) continue;
       const from = Math.max(s0, a), to = Math.min(s1, b);
@@ -644,7 +651,13 @@ class OfflineRenderer {
         g.gain.value = part.gain;
       }
       node.connect(g).connect(ctx.destination);
-      node.start(from - a, part.offset + (from - s0), to - from);
+      if (rate !== 1) {
+        node.playbackRate.value = rate;
+        node.start(from - a, part.offset + (from - s0) * rate);
+        node.stop(to - a);
+      } else {
+        node.start(from - a, part.offset + (from - s0), to - from);
+      }
     }
     return ctx.startRendering();
   }

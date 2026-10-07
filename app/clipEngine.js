@@ -86,7 +86,138 @@ class ClipEngine {
 
   // Assets used as auto-edit clips, in stack (Importance) order.
   get clips() {
-    return this.assets.filter(a => a.asClip).sort((a, b) => a.importance - b.importance);
+    return this.assets.filter(a => a.asClip && !this.isSplit(a)).sort((a, b) => a.importance - b.importance);
+  }
+
+  // ---- clip model (v2.4 step 2, D-82) -------------------------------------
+  //
+  //   used     { start, end }  the part of the source the auto-editor may use
+  //            (end null = to the end). In-points are picked inside it; a
+  //            locked clip plays exactly this part (capped, D-78).
+  //   speed    0.25–4 (1 = as recorded). On-screen length = used / speed;
+  //            the clip's own sound is resampled (pitch follows speed).
+  //   sections bar markers on a video (source seconds). Each section is a
+  //            child clip ("A · 2/4") with its own Pace, Importance, band,
+  //            speed and lock, sharing the parent's video (no copy).
+  //   pace 'fit' + fitBars: set by Fit to bars — holds exactly N bars and
+  //            plays its used part once from the start.
+  // Defaults reproduce the alpha: whole clip, 1×, no sections.
+  static clipDefaults() { return { used: { start: 0, end: null }, speed: 1, sections: [], fitBars: null }; }
+  static SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 4];
+
+  // Assets that own a file (sections read their parent's).
+  get mediaAssets() { return this.assets.filter(a => !a.parent); }
+
+  isSplit(a) { return !a.parent && a.kind === 'video' && Array.isArray(a.sections) && a.sections.length > 0; }
+  parentOf(a) { return a && a.parent ? this.clipById(a.parent) : null; }
+  sectionsOf(a) { return this.assets.filter(c => c.parent === a.id).sort((x, y) => x.section - y.section); }
+
+  // Source length (the file's), and the used part of it.
+  sourceLength(a) {
+    const p = this.parentOf(a) || a;
+    return p.duration || (p.el && isFinite(p.el.duration) ? p.el.duration : 0);
+  }
+  usedRange(a) {
+    const dur = this.sourceLength(a);
+    const u = a.used || { start: 0, end: null };
+    let start = Math.max(0, u.start || 0), end = u.end == null ? dur : u.end;
+    if (dur > 0) { end = Math.min(end, dur); start = Math.min(start, Math.max(0, end - 0.05)); }
+    return { start, end: Math.max(start, end) };
+  }
+  usedLength(a) { const r = this.usedRange(a); return r.end - r.start; }
+  speedOf(a) { return a && a.kind === 'video' ? Math.max(0.25, Math.min(4, a.speed || 1)) : 1; }
+  screenLength(a) { return this.usedLength(a) / this.speedOf(a); }
+
+  setUsed(id, start, end) {
+    const a = this.clipById(id);
+    if (!a || a.kind !== 'video') return;
+    const lim = a.parent ? this.sectionBounds(a) : { start: 0, end: this.sourceLength(a) || Infinity };
+    const s = Math.max(lim.start, Math.min(start, lim.end - 0.1));
+    const e = end == null ? null : Math.max(s + 0.1, Math.min(end, lim.end));
+    a.used = { start: +s.toFixed(3), end: e == null || (!a.parent && e >= lim.end - 0.001) ? (a.parent ? lim.end : null) : +e.toFixed(3) };
+    this.emit('clips');
+  }
+
+  setSpeed(id, v) {
+    const a = this.clipById(id);
+    if (!a || a.kind !== 'video') return;
+    a.speed = Math.max(0.25, Math.min(4, Math.round((parseFloat(v) || 1) * 1000) / 1000));
+    if (a.pace === 'fit') { a.pace = 'global'; a.fitBars = null; }
+    this.emit('clips');
+  }
+
+  // Fit to bars: speed = used / (bars × bar length), bars a whole number
+  // ≥ 1 (nearest to the clip's length at 1× when not given), speed kept
+  // within 0.25–4. The clip then holds exactly those bars.
+  fitToBars(id, barSec, bars = null) {
+    const a = this.clipById(id);
+    if (!a || a.kind !== 'video' || !(barSec > 0)) return null;
+    const used = this.usedLength(a);
+    let n = Math.max(1, Math.round(bars != null ? bars : used / barSec));
+    let speed = used / (n * barSec);
+    if (speed > 4) { n = Math.ceil(used / (4 * barSec)); speed = used / (n * barSec); }
+    if (speed < 0.25) { n = Math.max(1, Math.floor(used / (0.25 * barSec))); speed = used / (n * barSec); }
+    a.speed = Math.max(0.25, Math.min(4, speed));
+    a.pace = 'fit';
+    a.fitBars = n;
+    this.emit('clips');
+    return { bars: n, speed: a.speed };
+  }
+
+  // Sections: boundaries in source seconds (sorted, inside the clip). The
+  // children are rebuilt to match, keeping their settings by position.
+  sectionBounds(child) {
+    const p = this.parentOf(child);
+    if (!p) return { start: 0, end: this.sourceLength(child) };
+    const pts = [0, ...p.sections, this.sourceLength(p)];
+    return { start: pts[child.section], end: pts[child.section + 1] };
+  }
+
+  setSections(id, times) {
+    const p = this.clipById(id);
+    if (!p || p.parent || p.kind !== 'video') return;
+    const dur = this.sourceLength(p);
+    const pts = Array.from(new Set(times.map(t => +(+t).toFixed(3)))).filter(t => t > 0.05 && (!dur || t < dur - 0.05)).sort((x, y) => x - y);
+    const old = this.sectionsOf(p);
+    p.sections = pts;
+    const n = pts.length ? pts.length + 1 : 0;
+    // Remove extra children; add missing ones (next to the parent in the stack).
+    old.slice(n).forEach(c => this.removeAsset(c.id, { silent: true }));
+    for (let k = 0; k < n; k++) {
+      let c = old[k];
+      // New sections take the parent's place in the stack, in order.
+      if (!c) c = this.addSection(p, k, { importance: (p.importance || this.clips.length + 1) - 1 + (k + 1) / (n + 1) });
+      c.section = k;
+      c.of = n;
+      const b = this.sectionBounds(c);
+      c.used = { start: b.start, end: b.end };
+      c.name = `${p.name} · ${k + 1}/${n}`;
+    }
+    if (!n && p.asClip) p.importance = p.importance || this.clips.length + 1;
+    this.renumber();
+    this.emit('clips');
+  }
+
+  // A section clip: its own settings; media, file and size come from the
+  // parent (read through, never copied).
+  addSection(p, k, saved = {}) {
+    if (saved.id) this.nextClipId = Math.max(this.nextClipId, saved.id + 1);
+    const c = {
+      id: saved.id || this.nextClipId++, parent: p.id, section: k, of: saved.of || 1, kind: 'video',
+      name: saved.name || `${p.name} · ${k + 1}`, lastPos: 0,
+      asClip: saved.asClip !== false, layer: null, band: saved.band || p.band || 'any', pace: saved.pace || 'global',
+      importance: saved.importance != null ? saved.importance : this.clips.length + 1,
+      story: saved.story || 'none', storyHold: 3, fade: { on: false, curve: 'smooth', bars: 1, ...(saved.fade || {}) },
+      used: saved.used ? { ...saved.used } : { start: 0, end: null }, speed: saved.speed || 1, sections: [], fitBars: saved.fitBars || null,
+      ownThumb: null,
+    };
+    const engine = this;
+    ['file', 'url', 'media', 'el', 'bridge', 'duration', 'width', 'height', 'rotation', 'ready', 'error', 'offline', 'ref', 'path', 'origin'].forEach(k2 => {
+      Object.defineProperty(c, k2, { enumerable: true, configurable: true, get() { const pp = engine.clipById(c.parent); return pp ? pp[k2] : (k2 === 'offline' ? true : null); }, set() { /* the parent's */ } });
+    });
+    Object.defineProperty(c, 'thumb', { enumerable: true, configurable: true, get() { const pp = engine.clipById(c.parent); return c.ownThumb || (pp ? pp.thumb : null); }, set(v) { c.ownThumb = v; } });
+    this.assets.push(c);
+    return c;
   }
 
   // Video or image by MIME type, or by extension when the system reports
@@ -129,6 +260,7 @@ class ClipEngine {
       story: 'none',             // 'none' | 'hook' | 'result' | 'cta' (Story Mode only)
       storyHold: 3,              // seconds an image story block holds (Q9)
       fade: { on: false, curve: 'smooth', bars: 1 },   // Auto Fade Music around this locked clip (D-59)
+      ...ClipEngine.clipDefaults(),
     };
     this.assets.push(asset);
     if (kind === 'image') this.loadImageAsset(asset);
@@ -240,6 +372,9 @@ class ClipEngine {
       importance: saved.importance, story: saved.story, storyHold: saved.storyHold, rotation: saved.rotation || 0,
       fade: { on: false, curve: 'smooth', bars: 1, ...(saved.fade || {}) },
       path: saved.path || null, origin: saved.origin || null,   // where it lives / came from (D-74)
+      ...ClipEngine.clipDefaults(),
+      used: saved.used ? { ...saved.used } : { start: 0, end: null }, speed: saved.speed || 1,
+      sections: Array.isArray(saved.sections) ? saved.sections.slice() : [], fitBars: saved.fitBars || null,
     };
     this.assets.push(asset);
     this.emit('clips');
@@ -260,18 +395,22 @@ class ClipEngine {
     return true;
   }
 
-  removeAsset(id) {
+  removeAsset(id, { silent = false } = {}) {
     const clip = this.clipById(id);
     if (!clip) return;
+    if (!clip.parent) this.sectionsOf(clip).forEach(c => this.removeAsset(c.id, { silent: true }));
     if (this.current && this.current.clip === clip) this.current = null;
     if (this.outgoing && this.outgoing.clip === clip) { this.outgoing = null; this.transition = null; }
     if (this.pending && this.pending.clip === clip) this.pending = null;
-    if (clip.layer && !clip.offline) this.viz.clearLayerMedia(clip.layer);
-    if (clip.bridge) clip.bridge.remove();
-    if (clip.kind === 'video' && clip.media) clip.media.remove();
-    if (clip.url) URL.revokeObjectURL(clip.url);
+    if (!clip.parent) {
+      if (clip.layer && !clip.offline) this.viz.clearLayerMedia(clip.layer);
+      if (clip.bridge) clip.bridge.remove();
+      if (clip.kind === 'video' && clip.media) clip.media.remove();
+      if (clip.url) URL.revokeObjectURL(clip.url);
+    }
     this.assets = this.assets.filter(c => c !== clip);
     if (this.selectedId === id) this.selectedId = null;
+    if (silent) return;
     this.renumber();
     this.emit('clips');
   }
@@ -361,7 +500,8 @@ class ClipEngine {
   // How long a given clip holds once it's on screen: its own pace if set,
   // otherwise the global interval. Per-clip pace wins over manual timing too.
   intervalFor(clip, bpm) {
-    if (clip && clip.pace && clip.pace !== 'global') return MusicalTime.autoMultiplier(bpm, clip.pace).beats;
+    if (clip && clip.pace === 'fit' && clip.fitBars > 0) return MusicalTime.toBeats(clip.fitBars, 'bar');
+    if (clip && clip.pace && clip.pace !== 'global' && MusicalTime.AUTO_PACES[clip.pace]) return MusicalTime.autoMultiplier(bpm, clip.pace).beats;
     return this.intervalBeats(bpm);
   }
 
@@ -379,7 +519,7 @@ class ClipEngine {
       intervalBeats: beats,
       intervalMs: MusicalTime.beatsToMs(beats, bpm),
       globalBeats: this.intervalBeats(bpm),
-      clipPace: curClip && curClip.pace && curClip.pace !== 'global' ? curClip.pace : null,
+      clipPace: curClip && curClip.pace && curClip.pace !== 'global' && MusicalTime.AUTO_PACES[curClip.pace] ? curClip.pace : null,
       nextCutPos: this.nextCutPos,
       story: this.story ? this.story.role : null,
       autoLabel: MusicalTime.autoMultiplier(bpm, this.settings.autoPace).label,
@@ -399,10 +539,28 @@ class ClipEngine {
     return Math.min(0.999, Math.max(0, (Date.now() - this.lastSeenBeatTime) / this.viz.bpmInterval));
   }
 
+  // Playback rate for a clip's element; its sound follows (resampled, D-82).
+  static rate(el, sp) {
+    if (!el) return;
+    if ('preservesPitch' in el) el.preservesPitch = false;
+    else if ('mozPreservesPitch' in el) el.mozPreservesPitch = false;
+    if (el.playbackRate !== sp) el.playbackRate = sp;
+  }
+
+  // A regular clip loops inside its used part (live; the renderer wraps the
+  // same way from the segment's range).
+  keepInRange(entry) {
+    if (this.dry || !entry || !entry.clip || entry.clip.kind !== 'video' || entry.segment.story) return;
+    const el = entry.clip.el, rg = entry.segment.range;
+    if (!el || !rg) return;
+    if (el.currentTime >= rg[1] - 0.03 || el.currentTime < rg[0] - 0.25) { try { el.currentTime = rg[0]; } catch (e) { /* not seekable */ } }
+  }
+
   // Called once per analysis frame, after DJVisualizer.updateAudioData().
   update(audioData) {
     this.trackBands(audioData);
     if (!this.isAdvancing()) return;
+    this.keepInRange(this.current);
     if (this.clips.length === 0 && !this.storyBlocks().length) return;
 
     const bpm = this.bpmOf(audioData);
@@ -587,7 +745,7 @@ class ClipEngine {
   }
 
   storyLength(a, songDur) {
-    const own = a.kind === 'image' ? a.storyHold : (a.duration || (a.el && isFinite(a.el.duration) ? a.el.duration : 0));
+    const own = a.kind === 'image' ? a.storyHold : this.screenLength(a);
     return Math.min(own, this.storyCap(songDur));
   }
 
@@ -665,9 +823,11 @@ class ClipEngine {
         if (this.current.segment.end == null) this.current.segment.end = t;
         if (this.current.clip !== a) this.retire(this.current.clip);
       }
+      const r = this.usedRange(a), sp = this.speedOf(a);
       const segment = {
-        clipId: a.id, start: t, end: null, inPoint: into, transition: 'jump',
+        clipId: a.id, start: t, end: null, inPoint: a.kind === 'video' ? r.start + into * sp : into, transition: 'jump',
         band: this.dominant, beat: this.beatIndex, story: block.role, blendSec: 0, pass: this.pass,
+        speed: sp, range: a.kind === 'video' ? [r.start, r.end] : null,
       };
       this.segments.push(segment);
       this.current = { clip: a, segment };
@@ -676,12 +836,16 @@ class ClipEngine {
         a.el.loop = false;
         a.el.muted = false;
         a.el.volume = 1;
-        try { a.el.currentTime = into; } catch (e) { /* not seekable yet */ }
+        ClipEngine.rate(a.el, sp);
+        try { a.el.currentTime = segment.inPoint; } catch (e) { /* not seekable yet */ }
         a.el.play().catch(() => {});
       }
       this.emit('cut', segment);
-    } else if (a.kind === 'video' && !this.dry && !a.el.ended && Math.abs(a.el.currentTime - into) > 0.15) {
-      a.el.currentTime = into;
+    } else if (a.kind === 'video' && !this.dry && !a.el.ended) {
+      // Hold the used part's end; keep in sync with the master time.
+      const r = this.usedRange(a), want = Math.min(r.end, r.start + into * this.speedOf(a));
+      if (want >= r.end - 0.02) { if (!a.el.paused) a.el.pause(); }
+      else if (Math.abs(a.el.currentTime - want) > 0.15) a.el.currentTime = want;
     }
   }
 
@@ -692,6 +856,7 @@ class ClipEngine {
       a.el.muted = true;
       a.el.volume = 0;
       a.el.loop = true;
+      ClipEngine.rate(a.el, 1);
     }
     this.story = null;
   }
@@ -738,15 +903,19 @@ class ClipEngine {
     if (!clip) return null;
     // Images hold for their Pace; in-points don't apply (D-46).
     if (clip.kind === 'image') return { clip, inPoint: 0 };
-    const dur = clip.duration || (isFinite(clip.el.duration) ? clip.el.duration : 0);
-    let inPoint = 0;
-    if (this.settings.inPoint === 'resume') inPoint = clip.lastPos || 0;
+    // In-points only inside the clip's used part (D-82); a clip that
+    // fits bars plays its part from the start.
+    const r = this.usedRange(clip), sp = this.speedOf(clip);
+    let inPoint = r.start;
+    if (clip.pace === 'fit') inPoint = r.start;
+    else if (this.settings.inPoint === 'resume') inPoint = clip.lastPos || r.start;
     else if (this.settings.inPoint === 'random') {
-      const need = MusicalTime.beatsToMs(this.intervalFor(clip, bpm), bpm) / 1000;
-      inPoint = Math.random() * Math.max(0, dur - need);
+      const need = (MusicalTime.beatsToMs(this.intervalFor(clip, bpm), bpm) / 1000) * sp;
+      inPoint = r.start + Math.random() * Math.max(0, r.end - r.start - need);
     }
-    if (dur && inPoint >= dur) inPoint = 0;
-    if (!this.dry && !(this.current && this.current.clip === clip)) {
+    if (!(inPoint >= r.start && inPoint < r.end)) inPoint = r.start;
+    if (!this.dry && !(this.current && this.current.clip.el === clip.el && this.current.clip === clip)) {
+      ClipEngine.rate(clip.el, sp);
       try { clip.el.currentTime = inPoint; } catch (e) { /* not seekable yet */ }
       clip.el.play().catch(() => {});
     }
@@ -788,6 +957,12 @@ class ClipEngine {
       transition: def.id, band, beat: this.beatIndex,
       pace: next.clip.pace, holdBeats: hold, pass: this.pass,
     };
+    if (next.clip.kind === 'video') {
+      const r = this.usedRange(next.clip);
+      segment.speed = this.speedOf(next.clip);
+      segment.range = [r.start, r.end];
+      if (!this.dry) ClipEngine.rate(next.clip.el, segment.speed);
+    }
     this.segments.push(segment);
     this.current = { clip: next.clip, segment };
 
@@ -808,7 +983,7 @@ class ClipEngine {
   retire(clip) {
     if (this.dry || !clip || !clip.el) return;
     clip.lastPos = clip.el.currentTime;
-    const inUse = (this.current && this.current.clip === clip) || (this.pending && this.pending.clip === clip);
+    const inUse = (this.current && this.current.clip.el === clip.el) || (this.pending && this.pending.clip.el === clip.el);
     if (!inUse) clip.el.pause();
   }
 
@@ -869,7 +1044,7 @@ class ClipEngine {
       const s = this.segments[i];
       if (s.pass === this.pass || s.start < from || s.start >= now) continue;
       if (s.end != null && s.end <= now + 0.001) this.segments.splice(i, 1);
-      else { s.inPoint += now - s.start; s.start = now; }
+      else { s.inPoint += (now - s.start) * (s.speed || 1); s.start = now; }
     }
     for (let i = this.beats.length - 1; i >= 0; i--) {
       const b = this.beats[i];

@@ -75,10 +75,13 @@ class AssetPanel {
   renderList() {
     const sel = this.engine.selectedId;
     this.list.textContent = '';
-    this.engine.assets.forEach(a => {
+    // Sections sit right under their clip (D-82).
+    const order = [];
+    this.engine.mediaAssets.forEach(a => { order.push(a); order.push(...this.engine.sectionsOf(a)); });
+    order.forEach(a => {
       const row = document.createElement('button');
       row.type = 'button';
-      row.className = 'asset-row' + (a.id === sel ? ' selected' : '') + (a.error || a.offline ? ' bin-error' : '');
+      row.className = 'asset-row' + (a.id === sel ? ' selected' : '') + (a.error || a.offline ? ' bin-error' : '') + (a.parent ? ' is-section' : '');
       row.setAttribute('role', 'option');
       row.setAttribute('aria-selected', String(a.id === sel));
       row.dataset.id = a.id;
@@ -103,7 +106,8 @@ class AssetPanel {
   }
 
   roleTags(a) {
-    const t = [a.kind === 'image' ? 'IMG' : 'VID'];
+    const t = [a.parent ? `§${a.section + 1}` : a.kind === 'image' ? 'IMG' : 'VID'];
+    if (this.engine.isSplit(a)) t.push(`${a.sections.length + 1} sections`);
     if (a.asClip) t.push(`#${a.importance}`);
     if (a.layer) t.push(a.layer.slice(0, 3).toUpperCase());
     if (this.engine.settings.storyMode && a.story !== 'none') t.push(({ hook: 'HOOK', result: 'RES', cta: 'CTA' })[a.story]);
@@ -140,11 +144,13 @@ class AssetPanel {
     const clipBox = this.check('Auto-edit clip', a.asClip, (on) => this.engine.setAssetAsClip(a.id, on));
     clipBox.id = 'propAsClip';
     useAs.appendChild(clipBox.parentElement);
-    const layerSel = this.select([['', 'No Media Layer'], ['background', 'Layer: Background'], ['bass', 'Layer: Bass'], ['mid', 'Layer: Mid'], ['high', 'Layer: High']],
-      a.layer || '', (v) => this.engine.setAssetLayer(a.id, v || null));
-    layerSel.id = 'propLayer';
-    layerSel.setAttribute('aria-label', 'Media Layer slot');
-    useAs.appendChild(layerSel);
+    if (!a.parent) {
+      const layerSel = this.select([['', 'No Media Layer'], ['background', 'Layer: Background'], ['bass', 'Layer: Bass'], ['mid', 'Layer: Mid'], ['high', 'Layer: High']],
+        a.layer || '', (v) => this.engine.setAssetLayer(a.id, v || null));
+      layerSel.id = 'propLayer';
+      layerSel.setAttribute('aria-label', 'Media Layer slot');
+      useAs.appendChild(layerSel);
+    }
     if (a.layer && a.layer !== 'background') useAs.appendChild(this.layerControls(a.layer));
     P.appendChild(useAs);
 
@@ -184,10 +190,11 @@ class AssetPanel {
       } else if (isStory) {
         const note = document.createElement('p');
         note.className = 'hint';
-        const cap = this.engine.storyCap(), own = a.duration || 0;
+        const cap = this.engine.storyCap(), own = this.engine.screenLength(a);
+        const whole = this.engine.usedLength(a) >= this.engine.sourceLength(a) - 0.05;
         note.textContent = own > cap + 0.05
-          ? `Plays once with its own sound — the first ${fmtTime(cap, false)} of it (a locked clip is capped at a quarter of the song).`
-          : 'Plays its full length once, with its own sound.';
+          ? `Plays once with its own sound — the first ${fmtTime(cap, false)} of ${whole ? 'it' : 'its used part'} (a locked clip is capped at a quarter of the song).`
+          : `Plays ${whole ? 'its full length' : `its used part (${fmtTime(own, true)} on screen)`} once, with its own sound.`;
         sg.appendChild(note);
       }
       if (isStory) sg.appendChild(this.fadeControls(a));
@@ -201,8 +208,9 @@ class AssetPanel {
         [['any', 'Any band'], ['bass', 'Bass'], ['mid', 'Mid'], ['high', 'High']], a.band,
         (v) => this.engine.setClipBand(a.id, v), 'propBand',
         'Band pool (used when clip order = By dominant band)')));
-      clipG.appendChild(this.row('Pace', this.select(
-        [['global', 'Global'], ...Object.entries(MusicalTime.AUTO_PACES).map(([k, v]) => [k, v.label])], a.pace,
+      const paces = [['global', 'Global'], ...Object.entries(MusicalTime.AUTO_PACES).map(([k, v]) => [k, v.label])];
+      if (a.pace === 'fit') paces.push(['fit', `Fit: ${a.fitBars} bar${a.fitBars === 1 ? '' : 's'}`]);
+      clipG.appendChild(this.row('Pace', this.select(paces, a.pace,
         (v) => this.engine.setClipPace(a.id, v), 'propPace',
         'How long this clip holds on screen. Global follows the Auto-Editor panel.')));
       const imp = document.createElement('input');
@@ -216,6 +224,8 @@ class AssetPanel {
       clipG.appendChild(this.row('Importance', imp));
       P.appendChild(clipG);
     }
+    if (a.kind === 'video' && !this.engine.isSplit(a)) P.appendChild(this.timingControls(a));
+    else if (this.engine.isSplit(a)) P.appendChild(this.splitNote(a));
 
     // Per-asset status (D-43)
     const st = this.group('Status');
@@ -228,9 +238,104 @@ class AssetPanel {
     rm.type = 'button';
     rm.className = 'btn btn-block';
     rm.id = 'propRemove';
-    rm.textContent = 'Remove asset';
-    rm.addEventListener('click', () => this.engine.removeAsset(a.id));
+    rm.textContent = a.parent ? 'Remove all sections' : 'Remove asset';
+    rm.addEventListener('click', () => (a.parent ? this.engine.setSections(a.parent, []) : this.engine.removeAsset(a.id)));
     P.appendChild(rm);
+  }
+
+  lengthText(a) {
+    const e = this.engine, src = e.sourceLength(a), used = e.usedLength(a), scr = e.screenLength(a);
+    if (Math.abs(used - src) < 0.05 && Math.abs(scr - used) < 0.05) return fmtTime(src, true);
+    return `${src.toFixed(1)} → ${used.toFixed(1)} → ${scr.toFixed(1)} s`;   // source → used → on screen
+  }
+
+  // Amount used, speed, Fit to bars and sections (D-82).
+  timingControls(a) {
+    const e = this.engine;
+    const g = this.group('Timing');
+    g.classList.add('timing-group');
+    if (a.parent) {
+      const p = e.parentOf(a);
+      const note = document.createElement('p');
+      note.className = 'hint';
+      note.textContent = `Section ${a.section + 1} of ${a.of} of ${p ? p.name : 'its clip'} — same video, its own settings.`;
+      g.appendChild(note);
+    }
+    // Amount used
+    const r = e.usedRange(a);
+    const used = document.createElement('button');
+    used.type = 'button';
+    used.className = 'btn btn-block prop-used';
+    used.id = 'propUsed';
+    used.textContent = `${r.start.toFixed(1)}–${r.end.toFixed(1)} s · ${(r.end - r.start).toFixed(1)} s`;
+    used.title = 'The part of the clip the auto-editor may use';
+    used.addEventListener('click', () => this.app.clipTools.openRange(a, used));
+    g.appendChild(this.row('Used', used, 'div'));
+    // Speed: presets + number
+    const sp = e.speedOf(a);
+    const speeds = document.createElement('div');
+    speeds.className = 'seg seg-btns speed-btns';
+    speeds.id = 'propSpeeds';
+    speeds.setAttribute('role', 'radiogroup');
+    speeds.setAttribute('aria-label', 'Speed');
+    ClipEngine.SPEEDS.forEach(v => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = ClipTools.speedLabel(v).replace('×', '');
+      b.title = `${ClipTools.speedLabel(v)} speed`;
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', String(Math.abs(sp - v) < 1e-6));
+      if (Math.abs(sp - v) < 1e-6) b.classList.add('on');
+      b.addEventListener('click', () => e.setSpeed(a.id, v));
+      speeds.appendChild(b);
+    });
+    g.appendChild(this.row('Speed', speeds, 'div'));
+    const num = document.createElement('input');
+    num.type = 'number'; num.id = 'propSpeed'; num.min = 0.25; num.max = 4; num.step = 0.05; num.value = +sp.toFixed(3);
+    num.title = 'Speed (0.25–4×). The clip’s own sound changes pitch with it.';
+    num.addEventListener('change', () => e.setSpeed(a.id, num.value));
+    g.appendChild(this.row('Custom ×', num));
+    // Fit to bars
+    const barSec = this.app.clipTools.barSeconds();
+    const fit = document.createElement('div');
+    fit.className = 'fit-row';
+    const bars = document.createElement('input');
+    bars.type = 'number'; bars.id = 'propFitBars'; bars.min = 1; bars.step = 1;
+    bars.value = a.pace === 'fit' && a.fitBars ? a.fitBars : Math.max(1, Math.round(e.usedLength(a) / barSec));
+    bars.setAttribute('aria-label', 'Bars');
+    const fitBtn = document.createElement('button');
+    fitBtn.type = 'button'; fitBtn.className = 'btn'; fitBtn.id = 'propFit'; fitBtn.textContent = 'Fit to bars';
+    fitBtn.title = 'Set the speed so the used part fills exactly this many bars';
+    fitBtn.addEventListener('click', () => e.fitToBars(a.id, this.app.clipTools.barSeconds(), parseInt(bars.value, 10) || 1));
+    fit.append(bars, fitBtn);
+    g.appendChild(this.row('Bars', fit, 'div'));
+    const out = document.createElement('p');
+    out.className = 'hint';
+    out.id = 'propTimingNote';
+    const scr = e.screenLength(a);
+    out.textContent = `On screen ${fmtTime(scr, true)} = ${+(scr / barSec).toFixed(2)} bars${a.pace === 'fit' ? ` · holds ${a.fitBars} bar${a.fitBars === 1 ? '' : 's'}` : ''}.`;
+    g.appendChild(out);
+    // Sections
+    const sect = document.createElement('button');
+    sect.type = 'button'; sect.className = 'btn btn-block'; sect.id = 'propSections';
+    sect.textContent = a.parent ? 'Edit sections…' : 'Sections…';
+    sect.title = 'Split the clip on bar markers; each section becomes its own card';
+    sect.addEventListener('click', () => this.app.clipTools.openSections(a));
+    g.appendChild(sect);
+    return g;
+  }
+
+  splitNote(a) {
+    const g = this.group('Sections');
+    const note = document.createElement('p');
+    note.className = 'hint';
+    note.textContent = `Split into ${a.sections.length + 1} sections; each is its own card in the Action Editor.`;
+    g.appendChild(note);
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'btn btn-block'; b.id = 'propSections'; b.textContent = 'Edit sections…';
+    b.addEventListener('click', () => this.app.clipTools.openSections(a));
+    g.appendChild(b);
+    return g;
   }
 
   // Auto Fade Music around a locked clip (D-59). Ticking it reveals the
@@ -310,7 +415,7 @@ class AssetPanel {
     if (a.layer) roles.push(`Layer ${a.layer}`);
     const rows = [
       ['Type', a.kind === 'image' ? 'Image' : 'Video'],
-      ['Length', a.kind === 'image' ? 'Still' : (a.duration ? fmtTime(a.duration, true) : '…')],
+      ['Length', a.kind === 'image' ? 'Still' : (this.engine.sourceLength(a) ? this.lengthText(a) : '…')],   // source → used → on screen (D-82)
       ['Size', a.width ? `${a.width}×${a.height}` : '…'],
       ['Rotation', a.kind === 'video' ? (a.rotation ? `${a.rotation}° (corrected)` : 'None') : '—'],
       ['Decode', a.offline ? 'Offline: reconnect in 01 File' : a.error ? 'ERR' : a.ready ? 'OK' : 'Loading…'],
@@ -347,8 +452,10 @@ class AssetPanel {
     return g;
   }
 
-  row(label, control) {
-    const r = document.createElement('label');
+  // A row of buttons is a div: inside a <label>, a click anywhere on the
+  // row would press the first button.
+  row(label, control, tag = 'label') {
+    const r = document.createElement(tag);
     r.className = 'prop-row';
     const l = document.createElement('span');
     l.className = 'prop-row-label';

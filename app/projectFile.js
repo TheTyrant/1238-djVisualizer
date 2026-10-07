@@ -141,7 +141,7 @@ class ProjectFile {
     let n = 6000 + e.assets.length * 400 + app.text.items.length * 400;      // project.json + ZIP index
     n += e.segments.length * 260 + e.beats.length * 40;                       // cut list + beat grid
     n += app.record.frameCount * SessionRecord.FRAME_BYTES;                     // recorded motion
-    n += e.assets.filter(a => a.thumb).length * 6000;                          // thumbnails
+    n += e.mediaAssets.filter(a => a.thumb).length * 6000;                     // thumbnails (sections use their parent's)
     if (app.voice.isLoaded && app.voice.blob) n += app.voice.blob.size;       // voice is always inside
     if (app.live && app.live.take) n += app.live.take.blob.size;               // so is the live recording
     if (pack) n += this.packable().reduce((s, f) => s + f.size, 0);
@@ -153,14 +153,14 @@ class ProjectFile {
     const out = [];
     const tf = this.app.trackSource.file || (this.app.parkedTrack && this.app.parkedTrack.file);
     if (tf) out.push(tf);
-    this.app.clipEngine.assets.forEach(a => { if (a.file && !a.offline) out.push(a.file); });
+    this.app.clipEngine.mediaAssets.forEach(a => { if (a.file && !a.offline) out.push(a.file); });
     return out;
   }
 
   render() {
     if (!this.el || !this.el.status) return;
     if (document.activeElement !== this.el.name) this.el.name.value = this.name;
-    const linked = this.app.clipEngine.assets.filter(a => !a.offline).length;
+    const linked = this.app.clipEngine.mediaAssets.filter(a => !a.offline).length;
     const rec = this.app.record.recordedSeconds();
     const parts = [];
     parts.push(this.savedAt ? `${this.dirty ? 'Unsaved changes' : 'Saved'} · ${new Date(this.savedAt).toLocaleTimeString()}` : (this.dirty ? 'Not saved yet' : 'New project'));
@@ -212,6 +212,15 @@ class ProjectFile {
     const packSet = new Set(this.pack ? this.packable() : []);
     const assets = [];
     for (const a of e.assets) {
+      if (a.parent) {
+        // A section (D-82): settings only — the video is the parent's.
+        assets.push({
+          id: a.id, parent: a.parent, section: a.section, of: a.of, name: a.name, kind: a.kind,
+          asClip: a.asClip, band: a.band, pace: a.pace, importance: a.importance, story: a.story, fade: { ...(a.fade || {}) },
+          used: { ...a.used }, speed: a.speed, fitBars: a.fitBars,
+        });
+        continue;
+      }
       let thumb = null;
       if (a.thumb) {
         const blob = await new Promise(res => a.thumb.toBlob(res, 'image/jpeg', 0.8));
@@ -229,6 +238,7 @@ class ProjectFile {
         asClip: a.asClip, layer: a.layer, band: a.band, pace: a.pace, importance: a.importance,
         story: a.story, storyHold: a.storyHold, fade: { ...(a.fade || {}) }, duration: a.duration, width: a.width, height: a.height,
         rotation: a.rotation || 0, thumb,
+        used: { ...(a.used || { start: 0, end: null }) }, speed: a.speed || 1, sections: (a.sections || []).slice(), fitBars: a.fitBars || null,
       });
     }
     let voice = null;
@@ -323,7 +333,7 @@ class ProjectFile {
   // Connected-but-not-packed and not-connected media, so a save can say so.
   unsaved() {
     const out = [];
-    this.app.clipEngine.assets.forEach(a => { if (!a.file || a.offline) out.push(a.ref ? a.ref.name : a.name); });
+    this.app.clipEngine.mediaAssets.forEach(a => { if (!a.file || a.offline) out.push(a.ref ? a.ref.name : a.name); });
     if (this.app.audioSourceMode === 'file' && !this.app.trackSource.file && this.trackRef) out.push(this.trackRef.name);
     return out;
   }
@@ -527,12 +537,16 @@ Cancel = Save over it`);
 
     // 4. Assets: placeholders keep ids + settings; connect what we can.
     for (const saved of project.assets) {
+      if (saved.parent) continue;
       let thumb = null;
       if (saved.thumb && zr.has(saved.thumb)) thumb = await this.thumbCanvas(await zr.bytes(saved.thumb));
       e.addOfflineAsset(saved, thumb);
     }
+    // Sections (D-82) read their parent's media.
+    project.assets.filter(s => s.parent).forEach(s => { const p = e.clipById(s.parent); if (p) e.addSection(p, s.section, s); });
     e.renumber();
     for (const saved of project.assets) {
+      if (saved.parent) continue;
       const f = (await this.packedFile(zr, saved.packed, saved.ref))
         || (saved.ref ? await MediaLibrary.fromHandle(saved.ref, false) : null)
         || await DesktopFiles.find(saved.ref, saved.path, saved.origin);
@@ -597,7 +611,7 @@ Cancel = Save over it`);
       try { el.currentTime = t; } catch (e) { /* not seekable yet */ }
       if (!paused) el.play().catch(() => {});
     };
-    for (const a of app.clipEngine.assets) {
+    for (const a of app.clipEngine.mediaAssets) {
       if (!a.file) continue;
       const path = `media/assets/${a.id}/${ProjectFile.safeName(a.file.name)}`;
       const f = await this.packedFile(zr, path, MediaLibrary.ref(a.file));

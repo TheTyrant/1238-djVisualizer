@@ -24,7 +24,9 @@ class TempoGrid {
   }
 
   on(fn) { this.listeners.add(fn); }
-  emit() { this.listeners.forEach(fn => fn()); }
+  // why: 'edit' (×2, ÷2, typed, tapped, live / detected chosen) or 'detect'
+  // (the fast pass, a reset or a project opening) — only edits are changes.
+  emit(why = 'edit') { this.listeners.forEach(fn => fn(why)); }
 
   // The grid drives the edit in track mode unless the live clock is chosen.
   get active() { return this.source !== 'live' && this.bpm > 0 && !!this.app && this.app.isTrackMode(); }
@@ -49,20 +51,20 @@ class TempoGrid {
 
   // ---- changes -----------------------------------------------------------
 
-  set(patch, { silent = false } = {}) {
+  set(patch, { silent = false, why = 'edit' } = {}) {
     Object.assign(this, patch);
     if (this.bpm > 0) {
       const bar = this.barSec;
       this.offset = ((this.offset % bar) + bar) % bar;
     }
-    if (!silent) this.emit();
+    if (!silent) this.emit(why);
   }
 
   // The fast pass found a tempo: used unless one was set by hand.
   detect(bpm, offset) {
     this.detected = bpm > 0 ? { bpm, offset } : null;
-    if (this.source === 'median' || !(this.bpm > 0)) this.set({ bpm: bpm || 0, offset: offset || 0, source: this.source === 'live' ? 'live' : 'median' });
-    else this.emit();
+    if (this.source === 'median' || !(this.bpm > 0)) this.set({ bpm: bpm || 0, offset: offset || 0, source: this.source === 'live' ? 'live' : 'median' }, { why: 'detect' });
+    else this.emit('detect');
   }
 
   scale(f) {
@@ -127,13 +129,13 @@ class TempoGrid {
     this.detected = null;
     if (!t) this.set({ bpm: 0, offset: 0, source: 'live' }, { silent: true });
     else this.set({ bpm: t.bpm || 0, offset: t.offset || 0, source: ['median', 'manual', 'live'].includes(t.source) ? t.source : 'median' }, { silent: true });
-    this.emit();
+    this.emit('detect');
   }
 
   reset() {
     this.taps = [];
     this.detected = null;
-    this.set({ bpm: 0, offset: 0, source: 'median' });
+    this.set({ bpm: 0, offset: 0, source: 'median' }, { why: 'detect' });
   }
 }
 

@@ -409,9 +409,24 @@ class TimelinePanel {
       name.className = 'bin-name';
       name.textContent = clip.name;
       name.title = clip.name;
-      const dur = document.createElement('span');
+      // Video: used length, and on-screen length when the speed changes it.
+      // Click it for the amount used (D-82).
+      const isVid = clip.kind === 'video' && clip.ready && !clip.offline && !clip.error;
+      const dur = document.createElement(isVid ? 'button' : 'span');
       dur.className = 'bin-dur';
-      dur.textContent = clip.offline ? 'OFFLINE' : clip.error ? 'ERR' : !clip.ready ? '…' : clip.kind === 'image' ? 'Still' : fmtTime(clip.duration, false);
+      if (isVid) {
+        const e = this.engine, used = e.usedLength(clip), scr = e.screenLength(clip), src = e.sourceLength(clip);
+        dur.type = 'button';
+        dur.textContent = Math.abs(scr - used) < 0.05 ? fmtTime(used, false) : `${fmtTime(used, false)}→${fmtTime(scr, false)}`;
+        const whole = clip.parent ? (() => { const b = e.sectionBounds(clip); return b.end - b.start; })() : src;
+        if (used < whole - 0.05) dur.classList.add('is-set');
+        dur.title = `Source ${fmtTime(src, false)} · used ${fmtTime(used, false)} · on screen ${fmtTime(scr, false)} (${ClipTools.speedLabel(e.speedOf(clip))}). Click to set the amount used.`;
+        dur.setAttribute('aria-label', `Amount used: ${dur.title}`);
+        dur.addEventListener('click', (ev) => { ev.stopPropagation(); this.app.clipTools.openRange(clip, dur); });
+        dur.addEventListener('keydown', (ev) => ev.stopPropagation());
+      } else {
+        dur.textContent = clip.offline ? 'OFFLINE' : clip.error ? 'ERR' : !clip.ready ? '…' : clip.kind === 'image' ? 'Still' : fmtTime(clip.duration, false);
+      }
       if (clip.error) {
         card.classList.add('bin-error');
         card.title = `${clip.error}. Try Chrome/Edge, or convert to WebM (VP9) or H.264 MP4.`;
@@ -421,10 +436,25 @@ class TimelinePanel {
       const tags = document.createElement('div');
       tags.className = 'bin-tags';
       const t = [clip.kind === 'image' ? 'IMG' : 'VID'];
-      if (clip.pace !== 'global') t.push(MusicalTime.AUTO_PACES[clip.pace].label);
+      if (clip.speed && clip.speed !== 1) t.push(ClipTools.speedLabel(clip.speed));
+      if (clip.pace === 'fit') t.push(`${clip.fitBars} bar${clip.fitBars === 1 ? '' : 's'}`);
+      else if (clip.pace !== 'global' && MusicalTime.AUTO_PACES[clip.pace]) t.push(MusicalTime.AUTO_PACES[clip.pace].label);
       if (clip.band !== 'any') t.push(clip.band);
       if (clip.layer) t.push(`layer ${clip.layer}`);
-      tags.textContent = t.join(' · ');
+      const tagText = document.createElement('span');
+      tagText.className = 'bin-tag-text';
+      tagText.textContent = t.join(' · ');
+      tags.appendChild(tagText);
+      if (isVid) {
+        const sb = document.createElement('button');
+        sb.type = 'button';
+        sb.className = 'bin-sect';
+        sb.textContent = clip.parent ? `§${clip.section + 1}/${clip.of}` : 'Sections';
+        sb.title = 'Split this clip on bar markers (each section becomes its own card)';
+        sb.addEventListener('click', (ev) => { ev.stopPropagation(); this.app.clipTools.openSections(clip); });
+        sb.addEventListener('keydown', (ev) => ev.stopPropagation());
+        tags.appendChild(sb);
+      }
 
       const bar = document.createElement('div');
       bar.className = 'bin-band-bar';
