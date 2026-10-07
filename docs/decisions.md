@@ -453,6 +453,45 @@ The brief's four questions were not answered before the build. Rather than guess
 - **"Decoder error." (Omar, desktop export, twice):** one undecodable frame of one clip aborted the whole export. Reproduced with a damaged clip (release build: "Decoder error."). The exporter now retries a failing frame once with a fresh decoder; if it still fails it keeps that clip's last good picture for a second and tries again, finishes the export, and lists the clip(s) in the result ("Some frames of … couldn't be decoded and were held still"). A clip that can't be opened at all is left out (black) and listed. Not reproduced with Omar's other media (22 videos incl. converted .asf, phone 1080×1920, 2880×1776; reopened packed project; whole 3:15 timeline streamed to file at 1080p, 3.7× real time).
 - **CTA took over the project (Omar):** blocks were placed by the clip's full length, so a clip as long as the song made the CTA span 0:00–end and squeezed out Result. Each locked block is now capped at a quarter of the song (30 s live): Hook + Result + CTA never exceed three quarters. Example, 3:15 song with an 8-min recording as CTA: Hook 0:00–0:06, Result 1:37–2:26, CTA 2:26–3:15.
 
+
+## L. v2.4 — Stable prep: BSSMNT-Stable05 *(Omar's brief, 2026-10-07; in progress)*
+
+**Goal (Omar):** easier to get a *planned* result from random actions, and see what's going on under the hood (which clip, which band, why). Built on branch `v2.4` from `v2`; `audioProcessor.js` stays frozen (D-02). Ambiguous calls are made to match the brief and marked **Proposed — needs Omar**.
+
+### D-79 · Build identity: BSSMNT-Stable05 installs beside the alpha *(Accepted — built)*
+- **Decision:** appId `com.bssmnt.stable05`, productName **BSSMNT Stable05**: its own install folder, Start-menu and desktop shortcuts, uninstaller and user data (`%APPDATA%\BSSMNT Stable05`: recent list, skin, lane sizes, crash recordings). The alpha ("demoV2") keeps `com.bssmnt.app` / "BSS MNT", so either can be uninstalled without touching the other. Artifacts: `BSSMNT-Stable05-win-x64-Setup.exe` / `-Portable.exe` / `.zip`. Window title "BSSMNT Stable05"; the help panel shows **BSSMNT-Stable05**. Version `2.4.0-stable.5`; the header badge reads v2.4.
+- **Project format 2:** Stable05 writes `version: 2` (adds `tempo`; fast cuts are marked `fast: true`). The alpha already refuses a newer version ("This project was saved by a newer BSSMNT version."), so demoV2 can't open it. Stable05 opens version 1 unchanged (test: `tests/alpha-open.js` with a fixture saved by the alpha).
+- **"Save as a copy" notice:** the first Save over an alpha `.mnt` asks "OK = Save as a copy (keeps the alpha file) / Cancel = Save over it". *Proposed — needs Omar:* asked **once per opened project** (not once ever), and only where Save would overwrite the file (Chrome / Edge / desktop). Browsers without a save dialog download a new file anyway.
+
+### D-80 · Fast pass: the whole song analysed on load *(Accepted — built)*
+- **Decision:** when a track loads it is decoded offline (at the live analysis sample rate) and run through a **second instance of the frozen `AudioProcessor`** on a simulated 60 fps clock. Nothing in the frozen file changes. The fast pass gives that instance a simulated AnalyserNode (fftSize 1024, smoothing 0.3, −90…−10 dB; mono down-mix, Blackman window, FFT, |X|/N, time smoothing, dB → bytes, as the Web Audio spec defines it) and steps `Date.now()` by 1/60 s while it runs (synchronously, restored straight after). When the analysis EQ (D-51) is on, it is applied to the decoded audio first. Measured against the live analyser on the same song: mean bass difference 0.004 on an average of 0.31.
+- **Fills:** the session record (frames marked *fast*, flag 8) and the cut list. The cut list comes from running the real ClipEngine scheduler *dry* (no media touched, seeded so it's the same every load) on the same clock.
+  - **Played takes win:** a fast frame never replaces a played one, fast cuts only fill time nothing was played in, and playing over fast parts overwrites them as it goes.
+  - Edits (clips, settings, sensitivity, tempo) refill the fast parts after a short pause, never while playing. Saving and exporting settle a pending refill first.
+- **Responsive and cancellable:** decoding is off-thread; the mix-down and analysis run in `10 ms slices (a 3:15 song: about 3 s here). Progress and a cancel button show in the Status overlay. A refill takes `40 ms.
+- **Unplayed parts export with motion** (no more stills), so the "hasn't been played yet" warning no longer appears for a track. Fast frames take the visual mode around them (the current one when nothing was played).
+- **"Refill from fast pass"** (TEMPO menu) *(Proposed — needs Omar)*: replaces **all** played takes (motion and cuts) with the fast pass, after asking.
+
+### D-81 · Fixed tempo grid in track mode *(Accepted — built)*
+- **Decision:** `tempo: { bpm, offset, source: 'median' | 'manual' | 'live' }` is stored in the project. In track mode the edit follows one grid from 0:00:
+  - `ClipEngine` counts beats from it, and the first picture goes up at 0:00 (no "Listening for tempo…").
+  - Cuts land on multiples of the hold counted from bar 1, recorded at the grid line itself (not the frame after).
+  - After a seek or a story block, cutting continues on the grid without an extra cut.
+  - Everything that uses MusicalTime (story fades, the timeline grid, the BAR / BPM readouts) reads the grid.
+  - Live mode keeps the realtime clock.
+- **Header TEMPO readout** ("97 BPM · median"):
+  - ÷2, ×2, type-in and Tap (button or **T**, 4+ taps; while playing, the last tap places the beat) all make the source *manual*.
+  - **Detected** goes back to the fast-pass grid.
+  - **Live clock** follows the realtime detector, as the alpha did.
+- **Tempo = median, refined** *(Proposed — needs Omar)*: the brief says tempo = the median fast-pass BPM after lock. On Omar's 97 BPM test track that gives the wrong answer:
+  - the frozen detector reads 97…114 (live: 107…190), so the median is **112**;
+  - the beats it detects line up at exactly 97 (phase coherence 0.53 at 97, below 0.14 anywhere from 80 to 130).
+
+  So the median is refined to the tempo within ±25 % that the detected beats fit best, but only when that fit is clearly better (≥ 0.2 and ≥ 1.5× the median's). Result: 97. The readout still says "median".
+- **Bar 1** = the phase that best fits the detected beats (circular mean), on the beat of the bar with the most bass. The phase is moved back to where the bass starts rising: the detector only fires once bass is over its threshold *and* still rising, up to 8 frames after a soft kick. On a synthetic 120 BPM test track, bar 1 lands within half a 60 fps frame of the first downbeat.
+- **Alpha projects keep the live clock** *(Proposed — needs Omar)*: a project without `tempo` opens with source *live*, so it plays as before (rule 3). The detected grid still fills its unplayed parts, and one click on **Detected** switches it to the grid.
+- **Status overlay BPM** still shows the realtime detector; the TEMPO readout shows the grid. *Proposed — needs Omar.*
+
 ## I. Known carry-overs (pre-existing on `main`, not changed)
 - Placeholder text drawn with `p.text()` in WebGL mode doesn't render, because no font is loaded (affects the Media Layers "Upload images…" prompt). v2 uses a DOM overlay for its own hints.
 - `visualizer.js` has duplicate `drawAudioWaves` / `drawMandala` / `drawTunnel` definitions (the later ones win), plus unused snake-game code.

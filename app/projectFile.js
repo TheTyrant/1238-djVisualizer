@@ -21,7 +21,9 @@
 // its slice of the .mnt.
 class ProjectFile {
   static FORMAT = 'bssmnt-project';
-  static VERSION = 1;
+  // 2 = BSSMNT Stable05 (D-79): the alpha (demoV2, version 1) refuses it as
+  // "saved by a newer BSSMNT version"; Stable05 still opens version 1.
+  static VERSION = 2;
   static MIME = 'application/x-bssmnt';
 
   constructor(app) {
@@ -33,6 +35,7 @@ class ProjectFile {
     this.missing = [];        // [{ type: 'asset'|'track', id?, ref }]
     this.restoring = false;
     this.pack = true;
+    this.openedVersion = ProjectFile.VERSION;   // format of the open .mnt
     try { this.pack = localStorage.getItem('bssmnt.pack') !== '0'; } catch (e) { /* storage blocked */ }
   }
 
@@ -44,6 +47,8 @@ class ProjectFile {
   // Loading media after an open or a reconnect fires the same events as
   // edits do; those don't count as changes, so a short quiet window follows.
   markDirty() {
+    // Edits change what the fast pass fills in (cuts, levels): refill soon (D-80).
+    if (this.app.fastPass) this.app.fastPass.soon();
     if (this.restoring || performance.now() < (this.quietUntil || 0)) return;
     if (!this.dirty) { this.dirty = true; this.render(); }
   }
@@ -198,6 +203,9 @@ class ProjectFile {
   // { name, data: Uint8Array | Blob } — all stored as is.
   async entries() {
     const { strToU8 } = await this.zipLib();
+    // A refill waiting for its debounce runs now, so the file holds the
+    // settled cut list (D-80).
+    if (this.app.fastPass) this.app.fastPass.flush();
     const app = this.app, e = app.clipEngine, v = app.voice, viz = app.visualizer;
     const out = [];
     // Every connected media file goes in — no size limit (ZIP64, D-66).
@@ -262,6 +270,7 @@ class ProjectFile {
         duration: app.trackSource.duration || (pk && pk.duration) || (this.trackRef && this.trackDuration) || 0,
       },
       visualMode: viz.currentMode,
+      tempo: app.tempo.toJSON(),   // D-81
       display: app.display ? app.display.key : 'original',
       engine: { settings: { ...e.settings }, bandTransitions: { ...e.bandTransitions } },
       layers,
@@ -320,6 +329,15 @@ class ProjectFile {
   }
 
   async save(as) {
+    // An alpha project saved over in Stable05 can't be opened by the alpha
+    // (demoV2) any more: say so once per project and offer a copy (D-79).
+    if (!as && this.handle && this.openedVersion < ProjectFile.VERSION) {
+      this.openedVersion = ProjectFile.VERSION;
+      as = window.confirm(`${this.handle.name} was made with the BSSMNT alpha (demoV2). Once saved in BSSMNT Stable05, the alpha can't open it.
+
+OK = Save as a copy (keeps the alpha file)
+Cancel = Save over it`);
+    }
     const entries = await this.entries();
     const status = this.el && this.el.status;
     const progress = (pct, done, total) => {
@@ -427,6 +445,7 @@ class ProjectFile {
     }
     this.handle = handle;
     this.sourceHandle = handle;      // packed media plays from this file
+    this.openedVersion = project.version || 1;
     // The project is named after its file, as in other software (D-76).
     this.name = file.name.replace(/\.mnt$/i, '') || project.name || 'Untitled';
     this.dirty = false;
@@ -454,6 +473,8 @@ class ProjectFile {
     Object.assign(e.settings, project.engine.settings);
     e.settings.storyMode = true;   // D-58: positions are always available
     Object.assign(e.bandTransitions, project.engine.bandTransitions);
+    // Tempo grid (D-81): projects from before Stable05 keep the live clock.
+    app.tempo.fromJSON(project.tempo || null);
     document.querySelectorAll('#propBandMap select').forEach((sel, i) => { sel.value = e.bandTransitions[['bass', 'mid', 'high'][i]]; });
     app.timeline.syncProps();
     if (project.eq) {
@@ -552,7 +573,7 @@ class ProjectFile {
 
     // 6. Session record: cut list, beat grid, per-frame analysis log.
     const rec = project.record || {};
-    e.segments = (rec.edl || []).map(s => ({ ...s, pass: 0 }));
+    e.segments = (rec.edl || []).map(s => ({ ...s, pass: s.fast ? 'fast' : 0 }));
     e.beats = (rec.beats || []).map(b => ({ ...b, pass: 0 }));
     e.beatIndex = e.beats.length ? e.beats[e.beats.length - 1].index : -1;
     e.lastAdvanceTime = e.segments.reduce((m, s) => Math.max(m, s.end || 0), 0);
@@ -560,6 +581,7 @@ class ProjectFile {
     e.passStart = 0;
     if (rec.frames && zr.has(rec.frames.file)) app.record.fromBytes(await zr.bytes(rec.frames.file));
     e.emit('clips');
+    app.fastPass.soon();   // fast parts follow the restored session (D-80)
   }
 
   // After saving over the .mnt that packed media is playing from (Chrome /

@@ -1,4 +1,4 @@
-# Codemap — 1238 DJ Visualizer (v2)
+# Codemap — BSSMNT (v2.4 · Stable05)
 
 Where things live, how data moves, and which functions own what. The second half maps the **planned** functions and suggested frameworks for each roadmap phase (see [roadmap.md](roadmap.md)). Reasoning behind current choices is in [decisions.md](decisions.md).
 
@@ -28,6 +28,9 @@ app/
   analysisEq.js            Dynamic EQ: analysis-only filter chain (source → filters → analyser), presets, Listen
   videoOrientation.js      Reads rotation from MP4/MOV headers; 2D bridge so rotated phone video draws upright in WebGL
   sessionRecord.js         Per-frame analysis log on a 60 fps grid (for the offline renderer), serialisable
+  tempoGrid.js             Fixed tempo grid { bpm, offset, source } for track mode (D-81)
+  fastPass.js              Fast pass: whole-song offline analysis through the frozen AudioProcessor; fills record + cut list (D-80)
+  tempoPanel.js            Header TEMPO readout/menu + fast-pass progress row in the Status overlay (D-80, D-81)
   mediaLibrary.js          Linked-media fingerprints, remembered file handles (IndexedDB), reconnect by folder / files
   projectFile.js           .mnt project files: save / open / restore / reconnect / pack media
   zip64.js                 ZIP64 writer (streamed, stored) + reader (index only, slices); TempDisk (OPFS) for Firefox saves / exports (D-66)
@@ -42,6 +45,10 @@ app/
   assetPanel.js            03 Assets: image/video bin, asset list, selected-asset properties + status
   app.js                   App controller: wiring, audio source modes, master clock, shortcuts
   output.js                Pop-out window renderer (mirrors control window state)
+tests/
+  run.js                   Headless runner (puppeteer-core + installed Chrome/Edge): node tests/run.js tests/<file>.js
+  alpha-open.js            An alpha (format 1) project opens with the same cuts, settings and frames (fixtures/alpha-v1.mnt)
+  fastpass.js              Step 1: fast pass, tempo grid, ×2/÷2/type-in, played-wins, refill, cancel, never-played export
 test-assets/
   generate.html            Makes labelled test clips (WebM) + a 120 BPM test track (WAV) in-browser
 docs/
@@ -52,7 +59,7 @@ netlify.toml · vercel.json Static deploy configs (vercel uses globs: *.html, ap
 **No build step.** Plain `<script>` tags, global classes, loaded in this order (order matters — later files reference earlier globals):
 
 ```
-p5 (CDN) → audioProcessor → visualizer → trackSource → voiceTrack → musicalTime → transitions → clipEngine → timelinePanel → sidebar → headerPickers → assetPanel → eqPanel → app (analysisEq loads after trackSource)
+p5 → audioProcessor → visualizer → trackSource → analysisEq → voiceTrack → musicalTime → tempoGrid → transitions → clipEngine → sessionRecord → fastPass → … → headerPickers → tempoPanel → assetPanel → eqPanel → app (full list in index.html)
 ```
 
 External runtime dependencies: p5.js 1.9.0 (cdnjs), p5.asciify (unpkg, currently unused), Google Fonts (Boldonse, Inter Tight, JetBrains Mono — falls back to system fonts offline).
@@ -294,8 +301,20 @@ Pop-out canvas. Proxies the control window's `DJVisualizer` and loads its own co
 ### 3.10 `styles/styles.css` — ✅
 Tokens in `:root`: `--surface #EDEAE4 · --panel #E3DFD7 · --steel #D7DADC · --ink #1A1A1A · --bass/--mid/--high · --live`, fonts `--font-logo` (Boldonse, `.brand-mark` "BSS / MNT") · `--font-ui` · `--font-mono`, layout `--topbar-h · --sidebar-w · --editor-h`. Viewport stays black.
 
+### 3.7j `app/fastPass.js` — `class FastPass` — ✅ *(v2.4, D-80)*
+| Member | Role |
+|---|---|
+| `run(file)` / `reanalyse()` / `reanalyseSoon()` / `cancel()` / `clear()` | Decode (live sample rate) → mono → (analysis EQ) → `analyse()`; progress via `state` / `on()` |
+| `analyse(job)` | Simulated AnalyserNode (`FastPass.analyser()`) → a second **frozen** `AudioProcessor` with `Date.now()` stepped 1/60 s (`withClock`) → per-frame rms / bass / mid / high / bpm / bins + detected beat edges |
+| `tempoOf(d)` | Median BPM after lock → refined by edge fit → bar-1 phase (circular mean, onset-corrected, loudest downbeat) |
+| `fill({rolling})` / `soon()` / `flush()` | Writes fast frames (`SessionRecord.writeFast`) and fast cuts: the real `ClipEngine` run dry and seeded on the same clock, minus played spans |
+| `refill()` | Replaces played takes with the fast pass |
+
+### 3.7k `app/tempoGrid.js` — `class TempoGrid` — ✅ *(v2.4, D-81)*
+`bpm`, `offset` (bar 1), `source` (median / manual / live); `active` (track mode, not live); `beatAt(t)`, `timeOfBeat(b)`, `beatsIn(t0, t1)`; `detect()`, `scale()`, `type()`, `tap()`, `useLive()`, `useDetected()`; `toJSON()` / `fromJSON()` (no tempo = alpha project = live). `ClipEngine.grid` points at it: `updateOnGrid()` / `alignToGrid()` schedule cuts on it, and `ClipEngine.dry` skips all media calls. `app/tempoPanel.js` is its header menu.
+
 ### 3.11 Invariants
-1. `audioProcessor.js` is never modified.
+1. `audioProcessor.js` is never modified. *(v2.4: the fast pass drives a second instance with simulated inputs; it never patches the class.)*
 2. No code outside `musicalTime.js` hard-codes beats-per-bar.
 3. Element IDs used by `app.js` / `visualizer.js` are stable (see `index.html`). *Exception (v2.1, D-44):* the fixed `layerUpload-*` / `layerStatus-*` inputs are gone; `layerEnabled/Justify/Stack-<slot>` exist only while that slot's asset is selected (the visualizer already null-checks them).
 4. Timeline row heights in JS and CSS match.

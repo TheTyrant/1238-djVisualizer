@@ -45,6 +45,11 @@ class DJVisualizerApp {
     this.clipEngine.clock = () => this.masterTime();
     this.clipEngine.isAdvancing = () => this.visualizer.currentMode === 'clips' && this.timelineRolling();
     this.clipEngine.songDuration = () => (this.isTrackMode() ? this.trackSource.duration : 0);
+    // Fixed tempo grid + fast pass (v2.4, D-80, D-81): in track mode the
+    // whole song is analysed on load and the edit follows one grid.
+    this.tempo = new TempoGrid(this);
+    this.clipEngine.grid = this.tempo;
+    this.fastPass = new FastPass(this);
     this.timeline = new TimelinePanel(this);
     this.sessionStart = null;   // live-mode session clock (performance.now at start)
     this.sessionElapsed = 0;
@@ -183,6 +188,12 @@ class DJVisualizerApp {
           e.preventDefault();
           this.resetGains();
           break;
+        case 'KeyT':
+          // Tap tempo (D-81)
+          if (!this.isTrackMode()) break;
+          e.preventDefault();
+          this.tempoPanel.tap();
+          break;
         case 'Slash':
         case 'Question':
           e.preventDefault();
@@ -253,6 +264,8 @@ class DJVisualizerApp {
     this.display.init();
     this.headerPickers = new HeaderPickers(this);
     this.headerPickers.init();
+    this.tempoPanel = new TempoPanel(this);
+    this.tempoPanel.init();
 
     // 03 Assets: asset bin + selected-asset properties (v2.1, D-44)
     this.assetPanel = new AssetPanel(this);
@@ -260,9 +273,11 @@ class DJVisualizerApp {
 
     // Project file (.mnt): 03 Output › Project, Ctrl+S / Ctrl+Shift+S / Ctrl+O
     this.project.init();
-    this.clipEngine.on((type) => { if (type !== 'beat' && type !== 'select') this.project.markDirty(); });
+    this.clipEngine.on((type) => { if (type !== 'beat' && type !== 'select' && type !== 'fill') this.project.markDirty(); });
     this.voice.on(() => this.project.markDirty());
-    this.eq.on(() => this.project.markDirty());
+    this.eq.on(() => { this.project.markDirty(); this.fastPass.reanalyseSoon(); });
+    // A new tempo moves the grid: unplayed cuts follow it (D-81).
+    this.tempo.on(() => { this.project.markDirty(); this.fastPass.soon(60); });
     ['input', 'change'].forEach(t => document.addEventListener(t, (e) => {
       if (e.target && e.target.closest && e.target.closest('#sidebar, #rightbar, .channels') && e.target.id !== 'projectName' && e.target.name !== 'projectMedia' && e.target.type !== 'file') this.project.markDirty();   // file pickers aren't edits (adding media marks dirty on its own)
     }, true));
@@ -594,7 +609,7 @@ class DJVisualizerApp {
   // recorded one).
   storyFadeLevel(t, mode = this.visualizer.currentMode) {
     if (!this.isTrackMode() || mode !== 'clips') return 1;
-    const bpm = this.visualizer.audioData.bpm || 0;
+    const bpm = this.tempo.active ? this.tempo.bpm : (this.visualizer.audioData.bpm || 0);
     const bar = bpm > 0 ? MusicalTime.beatsToMs(MusicalTime.toBeats(1, 'bar'), bpm) / 1000 : 2;
     const shape = { linear: (x) => x, smooth: (x) => x * x * (3 - 2 * x), snap: (x) => Math.pow(x, 0.25), duck: (x) => x };
     let level = 1;
@@ -874,8 +889,11 @@ class DJVisualizerApp {
       if (!this.unparking) this.parkedTrack = null;   // a new track replaces the parked one
       this.attachEq();
       this.audioFileStatus.textContent = `Loaded: ${file.name}`;
-      if (!keepSession) this.resetSession();
+      if (!keepSession) { this.resetSession(); this.tempo.reset(); }
       this.timeline.loadTrackWaveform(file);
+      // Fast pass (D-80): analyse the whole song now, in slices; the grid,
+      // motion and cuts for the unplayed parts follow when it's done.
+      this.fastPass.run(file);
       this.applyMusicLevel();
       this.project.markDirty();
 
@@ -1008,7 +1026,7 @@ class DJVisualizerApp {
     // Track mode owns an <audio> element the processor doesn't know about;
     // unload() tears that down and then calls audioProcessor.stop().
     this.eq.detach();
-    if (this.trackSource.isLoaded) this.trackSource.unload();
+    if (this.trackSource.isLoaded) { this.trackSource.unload(); this.fastPass.clear(); }
     else this.audioProcessor.stop();
     this.visualizer.stop();
     this.clipEngine.setActive(false);

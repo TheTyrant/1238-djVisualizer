@@ -1,4 +1,4 @@
-// BSS MNT desktop launcher (D-70): the same app in its own window, with the
+// BSSMNT desktop launcher (D-70; Stable05 identity D-79): the same app in its own window, with the
 // Chromium engine it was tested against built in. It loads index.html from
 // the app folder (the file:// path, D-64), so nothing needs a server or the
 // internet.
@@ -25,7 +25,7 @@ function createWindow() {
     height: 1000,
     minWidth: 1100,
     minHeight: 700,
-    title: 'BSS MNT',
+    title: 'BSSMNT Stable05',
     backgroundColor: '#17181B',
     icon: path.join(ROOT, 'electron', 'icon.png'),
     webPreferences: {
@@ -46,7 +46,7 @@ function createWindow() {
     return {
       action: 'allow',
       overrideBrowserWindowOptions: {
-        width: 1280, height: 720, title: 'BSS MNT – Output', backgroundColor: '#000000', autoHideMenuBar: true,
+        width: 1280, height: 720, title: 'BSSMNT Stable05 – Output', backgroundColor: '#000000', autoHideMenuBar: true,
         webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false },
       },
     };
@@ -57,7 +57,7 @@ function createWindow() {
   win.webContents.on('will-prevent-unload', (e) => {
     const choice = dialog.showMessageBoxSync(win, {
       type: 'warning', buttons: ['Close without saving', 'Cancel'], defaultId: 1, cancelId: 1,
-      title: 'Unsaved changes', message: 'This project has unsaved changes.', detail: 'Close BSS MNT without saving them?',
+      title: 'Unsaved changes', message: 'This project has unsaved changes.', detail: 'Close BSSMNT Stable05 without saving them?',
     });
     if (choice === 0) e.preventDefault();   // = let the window close
   });

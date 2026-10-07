@@ -1,5 +1,5 @@
-BSS MNT — Video Composer  ·  alpha (BASSMNTalphaV1)
-=====================================================
+BSSMNT — Video Composer  ·  BSSMNT-Stable05
+============================================
 
 A beat-locked video composer and DJ visualizer. Load a song (or go live
 from a mic / line in), add your clips, and the Auto-Editor cuts them on
@@ -41,6 +41,8 @@ Ctrl+Shift+S       Save project as…
 Ctrl+O             Open project
 Ctrl+N             New project (desktop app; in a browser Alt+N)
 R                  Reset the bass / mid / high sensitivity to 1.0
+T                  Tap tempo (track mode, 4 taps or more). The TEMPO readout in the
+                   header also has ÷2, ×2, type a tempo, Detected and Live clock.
 ?                  Show / hide help
 Esc                Close help
 Clicking a panel tab a second time closes it.

@@ -36,6 +36,11 @@ class ClipEngine {
     this.clock = () => 0;            // seconds on the master timeline
     this.isAdvancing = () => false;  // true while the timeline is rolling
     this.songDuration = () => 0;     // track length in track mode, 0 in live mode
+    // Fixed tempo grid (D-81): when active, beats and cuts follow it from
+    // 0:00 instead of the live beat clock. Supplied by the app (TempoGrid).
+    this.grid = null;
+    // Dry run (fast pass, D-80): schedule only, never touch the media.
+    this.dry = false;
 
     this.listeners = new Set();
     this.bandAvg = { bass: 0.05, mid: 0.05, high: 0.05 };
@@ -340,6 +345,7 @@ class ClipEngine {
   clipById(id) { return this.assets.find(c => c.id === id); }
 
   pauseAll() {
+    if (this.dry) return;
     (this.assets || []).forEach(c => { if (c.el && !c.el.paused) c.el.pause(); });
   }
 
@@ -360,14 +366,14 @@ class ClipEngine {
   }
 
   status() {
-    const bpm = (this.viz.audioData && this.viz.audioData.bpm) || 0;
+    const bpm = this.bpmOf(this.viz.audioData);
     const curClip = this.current && this.current.clip;
     const beats = this.intervalFor(curClip, bpm);
     let state = 'running';
     if (this.clips.length === 0) state = 'no-clips';
     else if (!this.clips.some(c => c.ready) && this.clips.some(c => c.error)) state = 'unplayable';
     else if (!this.isAdvancing()) state = 'idle';
-    else if (!(bpm > 0) || this.beatIndex < 0) state = 'waiting-bpm';
+    else if (!this.gridOn() && (!(bpm > 0) || this.beatIndex < 0)) state = 'waiting-bpm';
     return {
       state, bpm,
       intervalBeats: beats,
@@ -378,11 +384,17 @@ class ClipEngine {
       story: this.story ? this.story.role : null,
       autoLabel: MusicalTime.autoMultiplier(bpm, this.settings.autoPace).label,
       dominant: this.dominant,
-      position: this.beatIndex >= 0 ? this.beatIndex + this.beatPhase() : -1,
+      position: this.gridOn() ? Math.max(0, this.grid.beatAt(this.clock())) : this.beatIndex >= 0 ? this.beatIndex + this.beatPhase() : -1,
     };
   }
 
+  gridOn() { return !!(this.grid && this.grid.active); }
+
+  // The grid's BPM while it drives the edit, else the live detector's.
+  bpmOf(audioData) { return this.gridOn() ? this.grid.bpm : ((audioData && audioData.bpm) || 0); }
+
   beatPhase() {
+    if (this.gridOn()) { const p = this.grid.beatAt(this.clock()); return p - Math.floor(p); }
     if (!this.viz.bpmInterval || this.lastSeenBeatTime == null) return 0;
     return Math.min(0.999, Math.max(0, (Date.now() - this.lastSeenBeatTime) / this.viz.bpmInterval));
   }
@@ -393,8 +405,9 @@ class ClipEngine {
     if (!this.isAdvancing()) return;
     if (this.clips.length === 0 && !this.storyBlocks().length) return;
 
-    const bpm = audioData.bpm || 0;
+    const bpm = this.bpmOf(audioData);
     this.overwritePlayed(this.clock());
+    if (this.gridOn()) { this.updateOnGrid(bpm); return; }
 
     // Beat edge from the visualizer's clock. Counted through story blocks
     // too, so the bar grid stays continuous.
@@ -453,6 +466,44 @@ class ClipEngine {
     if (!this.pending && untilCut <= Math.min(1, hold / 2)) {
       this.pending = this.prepare(this.choose(), bpm);
     }
+  }
+
+  // Fixed grid (D-81): beats come from the grid, a picture is on screen
+  // from 0:00, and cuts land on multiples of the hold counted from bar 1 —
+  // the same places every time. After a seek or a story block, cutting
+  // continues on the grid without an extra cut.
+  updateOnGrid(bpm) {
+    const t = this.clock();
+    const pos = this.grid.beatAt(t);
+    const idx = Math.floor(pos);
+    if (idx !== this.beatIndex) {
+      this.beatIndex = idx;
+      if (idx >= 0) this.beats.push({ time: this.grid.timeOfBeat ? this.grid.timeOfBeat(idx) : t, index: idx, pass: this.pass });
+      this.emit('beat', idx);
+    }
+    const block = this.settings.storyMode ? this.storyBlockAt(t) : null;
+    if (block) { this.playStory(block); return; }
+    if (this.story) { const end = this.story.end; this.endStory(); this.cut(bpm, null, end != null && end <= t ? end : t); this.alignToGrid(pos, bpm); return; }
+    // First picture: from where playback started (0:00 after Stop), not
+    // from the first analysis frame a few ms later.
+    if (!this.current) { this.cut(bpm, null, t - this.passStart < 0.1 ? this.passStart : t); this.alignToGrid(pos, bpm); return; }
+    if (this.nextCutPos == null) this.alignToGrid(pos, bpm);
+    const hold = this.intervalFor(this.current.clip, bpm);
+    if (hold !== this.holdBeats) {
+      this.holdBeats = hold;
+      this.nextCutPos = this.segStartPos + Math.max(1, Math.ceil((pos - this.segStartPos) / hold + 1e-6)) * hold;
+    }
+    // The cut is recorded at the grid line itself, not the frame after it.
+    if (pos >= this.nextCutPos - 1e-6) { this.cut(bpm, this.nextCutPos, Math.min(t, this.grid.timeOfBeat(this.nextCutPos))); return; }
+    const untilCut = this.nextCutPos - pos;
+    if (!this.pending && untilCut <= Math.min(1, hold / 2)) this.pending = this.prepare(this.choose(), bpm);
+  }
+
+  alignToGrid(pos, bpm) {
+    const hold = this.intervalFor(this.current && this.current.clip, bpm);
+    this.holdBeats = hold;
+    this.segStartPos = Math.floor(pos / hold + 1e-6) * hold;
+    this.nextCutPos = this.segStartPos + hold;
   }
 
   // Which band is currently most excited relative to its own recent level.
@@ -597,7 +648,10 @@ class ClipEngine {
   // not chosen by the automation. A video block plays once from the
   // matching offset, WITH its own audio (Q9), kept on the master timeline.
   playStory(block) {
-    const t = this.clock();
+    // Entered on the first frame inside the block: record it from the
+    // block's own start (D-81), so it sits exactly where it was placed.
+    const now = this.clock();
+    const t = now >= block.start && now - block.start < 0.1 ? block.start : now;
     const a = block.clip;
     const into = Math.max(0, t - block.start);
     if (!this.story || this.story.role !== block.role || this.story.clip !== a) {
@@ -618,7 +672,7 @@ class ClipEngine {
       this.segments.push(segment);
       this.current = { clip: a, segment };
       this.story = block;
-      if (a.kind === 'video') {
+      if (a.kind === 'video' && !this.dry) {
         a.el.loop = false;
         a.el.muted = false;
         a.el.volume = 1;
@@ -626,14 +680,14 @@ class ClipEngine {
         a.el.play().catch(() => {});
       }
       this.emit('cut', segment);
-    } else if (a.kind === 'video' && !a.el.ended && Math.abs(a.el.currentTime - into) > 0.15) {
+    } else if (a.kind === 'video' && !this.dry && !a.el.ended && Math.abs(a.el.currentTime - into) > 0.15) {
       a.el.currentTime = into;
     }
   }
 
   endStory() {
     const a = this.story && this.story.clip;
-    if (a && a.kind === 'video') {
+    if (a && a.kind === 'video' && !this.dry) {
       a.el.pause();
       a.el.muted = true;
       a.el.volume = 0;
@@ -692,7 +746,7 @@ class ClipEngine {
       inPoint = Math.random() * Math.max(0, dur - need);
     }
     if (dur && inPoint >= dur) inPoint = 0;
-    if (!(this.current && this.current.clip === clip)) {
+    if (!this.dry && !(this.current && this.current.clip === clip)) {
       try { clip.el.currentTime = inPoint; } catch (e) { /* not seekable yet */ }
       clip.el.play().catch(() => {});
     }
@@ -701,11 +755,11 @@ class ClipEngine {
 
   // atPos: musical position (beats) this cut lands on, or null before the
   // tempo has locked (the clip just goes on screen; no schedule yet).
-  cut(bpm, atPos) {
+  cut(bpm, atPos, atTime = null) {
     const next = this.pending || this.prepare(this.choose(), bpm);
     this.pending = null;
     if (!next) return;
-    if (next.clip.el && next.clip.el.paused) next.clip.el.play().catch(() => {});
+    if (!this.dry && next.clip.el && next.clip.el.paused) next.clip.el.play().catch(() => {});
 
     const hold = this.intervalFor(next.clip, bpm);
     if (atPos != null) {
@@ -714,7 +768,7 @@ class ClipEngine {
       this.nextCutPos = atPos + hold;
     }
 
-    const now = this.clock();
+    const now = atTime != null ? atTime : this.clock();
     const band = this.dominant;
     const transitionId = this.settings.transitionMode === 'band'
       ? this.bandTransitions[band]
@@ -752,7 +806,7 @@ class ClipEngine {
   }
 
   retire(clip) {
-    if (!clip || !clip.el) return;
+    if (this.dry || !clip || !clip.el) return;
     clip.lastPos = clip.el.currentTime;
     const inUse = (this.current && this.current.clip === clip) || (this.pending && this.pending.clip === clip);
     if (!inUse) clip.el.pause();

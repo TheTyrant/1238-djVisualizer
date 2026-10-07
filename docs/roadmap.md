@@ -117,7 +117,7 @@ Supersedes parts of the v2.1 layout (the v2.1 table below describes it as it was
 | 2 ✅ | **Session record + .mnt project files:** the cut list is kept across seeks with punch-in overwrite; per-frame analysis log; projects save/open as `.mnt` with linked media and reconnect (D-56, D-57) |
 | 3 ✅ | **Renderer (all visual modes):** frame loop at the export frame rate replaying the record through the existing drawing code (Spectrum Bars gets a canvas version); clips decoded frame-accurately (WebCodecs via Mediabunny, rotation from D-54); GPU encode; audio mixdown with mutes, fades, voice and story sound; streamed to disk with progress, time left and cancel |
 | 4 ✅ | **Output panel:** MP4 H.264+AAC, size (16:9 720p/1080p/4K, 9:16, 1:1), frame rate, quality, range (whole / played part). *WebM not offered yet.* |
-| 5 | **Fast pass:** the same frozen analysis run over a track or recorded set at high speed, filling the record without real-time playback |
+| 5 ✅ | **Fast pass:** the same frozen analysis run over a track at high speed, filling the record without real-time playback *(v2.4 step 1, D-80; recorded live sets are still recorded in real time)* |
 | 6 | **Firefox / Safari fallbacks:** OPFS output + download, WebAssembly audio encoding where needed |
 
 **Runs offline:** all libraries and fonts are local (`vendor/`); **Start BSS MNT.bat** serves the app on this computer (D-61).
@@ -129,6 +129,22 @@ Supersedes parts of the v2.1 layout (the v2.1 table below describes it as it was
 - [x] Muted tracks are absent from the exported audio; unmuted voice and story sound are present and in sync.
 - [ ] A 3-minute 1080p export finishes faster than real time on the target machine; a 2-hour project exports without running out of memory.
 - [ ] Every visual mode exports.
+
+---
+
+## v2.4 — Stable prep: BSSMNT-Stable05 🟡 *(Omar's brief, due 2026-10-09; decisions section L)*
+
+**Goal:** easier to get a *planned* result from random actions, and see what's going on under the hood (which clip, which band, why). Installs beside the alpha as **BSSMNT Stable05** (D-79).
+
+| Step | What |
+|---|---|
+| 1 ✅ | **Fast pass + fixed tempo grid** (D-80, D-81): whole song analysed on load through the frozen processor; unplayed parts get motion and cuts; cuts on one grid from 0:00; TEMPO readout with ÷2 ×2, type-in, tap, live clock |
+| 2 | **Clip model:** amount used, bar-marker sections as child cards, speed and Fit to bars |
+| 3 | **Workspace:** band-coloured cards, resizable lanes, compact band strip, AE panel (Global edit, Band members, group by band) |
+| 4 | **Placement model + over stream:** shared placement for layers, images and titles; images over video; title locks and trend presets |
+| 5 | **Per-clip visual mode** (Replace / Over, on a transparent layer) |
+| 6 | **Timeline:** select / scrub / loop a range, Selection export, master fades |
+| 7 | **Verify, docs, build** `BSSMNT-Stable05-win-x64*` |
 
 ---
 

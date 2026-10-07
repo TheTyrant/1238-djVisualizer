@@ -145,6 +145,7 @@ class OfflineRenderer {
   async export(opts, onProgress = () => {}) {
     if (this.busy) throw new Error('An export is already running.');
     if (!OfflineRenderer.supported()) throw new Error('This browser cannot encode video. Use Chrome or Edge.');
+    if (this.app.fastPass) this.app.fastPass.flush();   // settled cut list (D-80)
     const plan = this.plan();
     if (!plan.ok) throw new Error(plan.warnings[0] || 'Nothing to export.');
     const size = OfflineRenderer.SIZES[opts.size] || OfflineRenderer.SIZES['1080p'];
@@ -340,6 +341,8 @@ class OfflineRenderer {
   frameData(i) {
     const rec = this.app.record;
     const f = rec.frame(i);
+    // Fast-pass frames (D-80) show the mode around them, like the stills did.
+    if (f && f.fast) { f.mode = this._lastMode || this.app.visualizer.currentMode; return f; }
     if (f) { this._lastMode = f.mode; return f; }
     let mode = this._lastMode;
     if (!mode) {

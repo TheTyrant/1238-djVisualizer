@@ -783,7 +783,7 @@ class TimelinePanel {
 
     // Beat / bar grid from the beats the engine actually counted
     const bpb = MusicalTime.beatsPerBar();
-    const beats = this.engine.beats;
+    const beats = this.app.tempo.active ? this.app.tempo.beatsIn(start, start + span) : this.engine.beats;   // fixed grid (D-81)
     let pxPerBeat = Infinity;
     if (beats.length > 1) pxPerBeat = (x(beats[beats.length - 1].time) - x(beats[0].time)) / (beats.length - 1);
     for (const b of beats) {

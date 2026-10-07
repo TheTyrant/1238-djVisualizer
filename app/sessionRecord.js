@@ -9,7 +9,8 @@
 // Frame layout (FRAME_BYTES bytes, little-endian):
 //   0  u16 rms ×10000       2  u16 bass ×10000    4  u16 mid ×10000
 //   6  u16 high ×10000      8  u16 bpm            10 u8  beatFlash ×255
-//   11 u8  beatPulse ×255   12 u8  flags (1 = written, 2 = beat edge, 4 = active)
+//   11 u8  beatPulse ×255   12 u8  flags (1 = written, 2 = beat edge, 4 = active,
+//                                             8 = from the fast pass, D-80)
 //   13 u8  visual mode index                       14..141 spectrum, 128 bins ×255
 class SessionRecord {
   static FPS = 60;
@@ -59,6 +60,20 @@ class SessionRecord {
     if (i > this.maxFrame) this.maxFrame = i;
   }
 
+  // Fast pass (D-80): frame f from the offline analysis. Never replaces a
+  // frame that was played for real (played takes win).
+  writeFast(f, data, viz, beatEdge) {
+    const buf = this.chunk(f, true);
+    const off = (f % SessionRecord.CHUNK_FRAMES) * SessionRecord.FRAME_BYTES;
+    const flags = buf[off + 12];
+    if ((flags & 1) && !(flags & 8)) return false;
+    const bytes = this.encode(data, viz, beatEdge);
+    bytes[12] |= 8;
+    buf.set(bytes, off);
+    if (f > this.maxFrame) this.maxFrame = f;
+    return true;
+  }
+
   // A seek breaks continuity: don't fill frames across the jump.
   breakContinuity() { this.lastWritten = -1; }
 
@@ -98,9 +113,20 @@ class SessionRecord {
       rms: dv.getUint16(0, true) / 10000, bass: dv.getUint16(2, true) / 10000,
       mid: dv.getUint16(4, true) / 10000, high: dv.getUint16(6, true) / 10000,
       bpm: dv.getUint16(8, true), beatFlash: buf[off + 10] / 255, beatPulse: buf[off + 11] / 255,
-      beat: !!(buf[off + 12] & 2), isActive: !!(buf[off + 12] & 4),
+      beat: !!(buf[off + 12] & 2), isActive: !!(buf[off + 12] & 4), fast: !!(buf[off + 12] & 8),
       mode: SessionRecord.MODES[buf[off + 13]] || 'spectrum', spectrum,
     };
+  }
+
+  // Seconds played for real (not from the fast pass).
+  playedSeconds() {
+    let n = 0;
+    for (let i = 0; i <= this.maxFrame; i++) {
+      const buf = this.chunk(i, false);
+      const fl = buf ? buf[(i % SessionRecord.CHUNK_FRAMES) * SessionRecord.FRAME_BYTES + 12] : 0;
+      if ((fl & 1) && !(fl & 8)) n++;
+    }
+    return n / SessionRecord.FPS;
   }
 
   // How much of the timeline has been recorded (for the UI).

@@ -1,8 +1,8 @@
 {
   "name": "bssmnt",
-  "productName": "BSS MNT",
-  "version": "0.1.0-alpha.1",
-  "description": "BSS MNT — beat-locked video composer and DJ visualizer. Offline: renders, packs and exports on your machine.",
+  "productName": "BSSMNT Stable05",
+  "version": "2.4.0-stable.5",
+  "description": "BSSMNT Stable05 — beat-locked video composer and DJ visualizer. Offline: renders, packs and exports on your machine.",
   "private": true,
   "main": "electron/main.js",
   "author": "Omar (TheTyrant); original by Waskar Paulino (traksaw)",
@@ -17,8 +17,8 @@
     "ffmpeg-static": "^5.3.0"
   },
   "build": {
-    "appId": "com.bssmnt.app",
-    "productName": "BSS MNT",
+    "appId": "com.bssmnt.stable05",
+    "productName": "BSSMNT Stable05",
     "directories": {
       "output": "dist"
     },
@@ -42,15 +42,15 @@
         "zip"
       ],
       "icon": "electron/icon.png",
-      "artifactName": "BSSMNT-alphaV1-win-x64.${ext}",
-      "legalTrademarks": "BSS MNT"
+      "artifactName": "BSSMNT-Stable05-win-x64.${ext}",
+      "legalTrademarks": "BSSMNT"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "shortcutName": "BSS MNT",
-      "artifactName": "BSSMNT-alphaV1-win-x64-Setup.${ext}"
+      "shortcutName": "BSSMNT Stable05",
+      "artifactName": "BSSMNT-Stable05-win-x64-Setup.${ext}"
     },
     "electronFuses": {
       "runAsNode": false,
@@ -61,9 +61,9 @@
       "enableEmbeddedAsarIntegrityValidation": true
     },
     "portable": {
-      "artifactName": "BSSMNT-alphaV1-win-x64-Portable.${ext}"
+      "artifactName": "BSSMNT-Stable05-win-x64-Portable.${ext}"
     },
-    "copyright": "Copyright 2026 Omar (BSS MNT)",
+    "copyright": "Copyright 2026 Omar (BSSMNT)",
     "extraResources": [
       {
         "from": "node_modules/ffmpeg-static/ffmpeg.exe",

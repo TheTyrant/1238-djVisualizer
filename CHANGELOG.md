@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased — v2.4 (BSSMNT-Stable05)
+Built on branch `v2.4`. Installs beside the alpha with its own settings.
+
+### Added
+- **BSSMNT Stable05** installs next to the alpha (demoV2) with its own shortcuts, settings, recent list and crash recordings. The label shows in the window title and the help panel.
+- **Fast pass:** a loaded song is analysed in a few seconds (progress and Cancel in the Status overlay). The whole song gets motion and cuts before you press play; what you play replaces them as you go. **Refill from fast pass** (TEMPO menu) replaces what you played.
+- **Fixed tempo grid:** in track mode, cuts follow one grid from 0:00, the same every time the song loads — no more "Listening for tempo…". The header shows the tempo ("97 BPM · median"). Use ÷2, ×2, type a tempo, Tap (or **T**), Detected, or Live clock (the old behaviour).
+
+### Changed
+- Songs that were never played export with full motion and cuts instead of a still picture.
+- Projects are saved in a new format (version 2) that the alpha can't open. Alpha projects open as before, and the first Save over one offers **Save as a copy**.
+
 ## BASSMNTalphaV1 — bug-fix update (2026-10-06)
 Same version (alpha V1); fixes and one import addition.
 
