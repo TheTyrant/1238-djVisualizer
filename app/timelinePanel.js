@@ -9,7 +9,8 @@ class TimelinePanel {
   constructor(app) {
     this.app = app;
     this.engine = app.clipEngine;
-    this.ROWS = { ruler: 28, master: 72, clips: 64, voice: 40, text: 40 };   // match styles.css (.ch-*)
+    // Lane heights come from the workspace layout (D-84); these are the defaults.
+    this.ROWS_DEFAULT = { ruler: 28, master: 72, clips: 64, voice: 40, text: 40 };
     this.LIVE_WINDOW = 30;                                // seconds visible in live mode
     this.view = { start: 0, span: 30, fit: true };
     this.energy = [];     // { t, b, m, h } per analysis frame
@@ -37,7 +38,6 @@ class TimelinePanel {
     this.initProps();
     this.initBin();
     this.initCanvasInteraction();
-    this.initSplitter();
 
     // Text lane appears once there is any text (D-60).
     this.app.text.on(() => {
@@ -261,6 +261,54 @@ class TimelinePanel {
       el.hidden = el.dataset.showTiming !== s.timingMode;
     });
     this.updateReadout();
+    if (this.el.binCards) this.renderBin();   // Clip order By band groups the Action Editor (D-86)
+  }
+
+  // Band members (D-86): per band, its swatch, how many clips, their tags
+  // as chips (click = select that card), lit while that band triggered the
+  // cut on air.
+  renderMembers() {
+    const box = document.getElementById('bandMembers');
+    if (!box) return;
+    const e = this.engine, m = e.bandMembers(), tags = e.memberTags();
+    const cur = e.current && e.current.segment;
+    const hot = cur && !cur.story ? cur.band : null;
+    const onAir = e.current ? e.current.clip.id : null;
+    const key = JSON.stringify([ClipEngine.BANDS.map(b => m[b].map(c => `${c.id}:${c.name}`)), hot, onAir, e.selectedId]);
+    if (key === this.membersKey) return;
+    this.membersKey = key;
+    box.textContent = '';
+    const title = document.createElement('div');
+    title.className = 'prop-label';
+    title.textContent = 'Band members';
+    box.before(title);
+    if (this.membersTitle) this.membersTitle.remove();
+    this.membersTitle = title;
+    ClipEngine.BANDS.forEach(b => {
+      const row = document.createElement('div');
+      row.className = 'bm-row' + (hot === b ? ' is-hot' : '');
+      row.dataset.band = b;
+      row.title = hot === b ? `${b} triggered the cut on air` : '';
+      row.innerHTML = `<span class="band-swatch ${b}"></span><span class="bm-label">${b === 'any' ? 'Any' : b}</span><span class="bm-count">${m[b].length}</span>`;
+      const chips = document.createElement('span');
+      chips.className = 'bm-chips';
+      if (!m[b].length) { const n = document.createElement('span'); n.className = 'bm-empty'; n.textContent = '—'; chips.appendChild(n); }
+      m[b].forEach(c => {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'bm-chip' + (c.id === onAir ? ' on-air' : '') + (c.id === e.selectedId ? ' selected' : '');
+        chip.textContent = tags.get(c.id);
+        chip.title = `${c.name} — click to select its card`;
+        chip.addEventListener('click', () => {
+          e.select(c.id);
+          const card = this.el.binCards.querySelector(`.bin-card[data-id="${c.id}"]`);
+          if (card) { card.scrollIntoView({ block: 'nearest', inline: 'nearest' }); card.focus({ preventScroll: true }); }
+        });
+        chips.appendChild(chip);
+      });
+      row.appendChild(chips);
+      box.appendChild(row);
+    });
   }
 
   updateReadout() {
@@ -301,7 +349,9 @@ class TimelinePanel {
     bin.addEventListener('dragover', (e) => {
       if (!isCard(e)) return;
       e.preventDefault();
-      this.showInsert(this.insertIndexAt(e.clientX));
+      const g = this.groupAt(e);
+      this.el.binCards.querySelectorAll('.bin-group').forEach(x => x.classList.toggle('drop-target', x === g));
+      this.showInsert(this.insertIndexAt(e.clientX, g));
     });
     bin.addEventListener('dragleave', (e) => {
       if (!bin.contains(e.relatedTarget)) this.showInsert(-1);
@@ -311,9 +361,12 @@ class TimelinePanel {
       e.preventDefault();
       e.stopPropagation();
       const id = Number(e.dataTransfer.getData(CARD)) || this.dragId;
-      if (id != null) this.reorderTo(id, this.insertIndexAt(e.clientX));
+      const g = this.groupAt(e);
+      if (id != null && g) this.dropInGroup(id, g, this.insertIndexAt(e.clientX, g));
+      else if (id != null) this.reorderTo(id, this.insertIndexAt(e.clientX));
       this.dragId = null;
       this.showInsert(-1);
+      this.el.binCards.querySelectorAll('.bin-group').forEach(x => x.classList.remove('drop-target'));
     });
 
     // Files from the desktop can be dropped anywhere on the bottom editor
@@ -343,8 +396,35 @@ class TimelinePanel {
 
   // Insertion slot 0..N under the pointer (before the card whose centre is
   // to the right of x).
-  insertIndexAt(x) {
-    const cards = Array.from(this.el.binCards.querySelectorAll('.bin-card:not(.story-card)'));
+  // The band group under the pointer (grouped Action Editor only).
+  groupAt(e) {
+    const groups = Array.from(this.el.binCards.querySelectorAll('.bin-group'));
+    if (!groups.length) return null;
+    const hit = e.target && e.target.closest && e.target.closest('.bin-group');
+    if (hit) return hit;
+    return groups.find(g => { const r = g.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right + 10; }) || groups[groups.length - 1];
+  }
+
+  // Drop into a band group: the card joins that band (if it wasn't in it)
+  // and takes the place it was dropped at, among that band's cards.
+  dropInGroup(id, group, slot) {
+    const e = this.engine, band = group.dataset.band;
+    const clip = e.clipById(id);
+    if (!clip) return;
+    const members = Array.from(group.querySelectorAll('.bin-card:not(.story-card)')).map(c => Number(c.dataset.id)).filter(x => x !== id);
+    const fromSlot = Array.from(group.querySelectorAll('.bin-card:not(.story-card)')).findIndex(c => Number(c.dataset.id) === id);
+    if (fromSlot >= 0 && slot > fromSlot) slot--;
+    if (clip.band !== band) e.setClipBand(id, band);
+    const stack = e.stack.filter(c => c.id !== id);
+    let to;
+    if (!members.length) to = stack.length;
+    else if (slot < members.length) to = stack.findIndex(c => c.id === members[slot]);
+    else to = stack.findIndex(c => c.id === members[members.length - 1]) + 1;
+    e.moveClip(id, Math.max(0, to));
+  }
+
+  insertIndexAt(x, group = null) {
+    const cards = Array.from((group || this.el.binCards).querySelectorAll('.bin-card:not(.story-card)'));
     for (let i = 0; i < cards.length; i++) {
       const r = cards[i].getBoundingClientRect();
       if (x < r.left + r.width / 2) return i;
@@ -352,8 +432,9 @@ class TimelinePanel {
     return cards.length;
   }
 
-  showInsert(slot) {
-    const cards = Array.from(this.el.binCards.querySelectorAll('.bin-card:not(.story-card)'));
+  showInsert(slot, group = this.el.binCards.querySelector('.bin-group.drop-target')) {
+    this.el.binCards.querySelectorAll('.insert-before, .insert-after').forEach(c => c.classList.remove('insert-before', 'insert-after'));
+    const cards = Array.from((group || this.el.binCards).querySelectorAll('.bin-card:not(.story-card)'));
     cards.forEach((c, i) => {
       c.classList.toggle('insert-before', i === slot);
       c.classList.toggle('insert-after', slot === cards.length && i === cards.length - 1);
@@ -376,6 +457,28 @@ class TimelinePanel {
       ? document.activeElement.closest('.bin-card').dataset.id : null;
     this.el.binCount.textContent = `${clips.length} clip${clips.length === 1 ? '' : 's'}`;
     cards.textContent = '';
+    // Band members (D-85): B1 / M2 / H1 / A1 tags; grouped by band when the
+    // clip order is By band (D-86).
+    const tagOf = this.engine.memberTags();
+    const grouped = this.engine.settings.order === 'band';
+    cards.classList.toggle('grouped', grouped);
+    const groups = {};
+    if (grouped) {
+      ClipEngine.BANDS.forEach(b => {
+        const g = document.createElement('div');
+        g.className = 'bin-group';
+        g.dataset.band = b;
+        const head = document.createElement('div');
+        head.className = 'bin-group-head';
+        const n = clips.filter(c => (c.band || 'any') === b).length;
+        head.innerHTML = `<span class="band-swatch ${b}"></span><span>${b === 'any' ? 'Any' : b} · ${n}</span>`;
+        const list = document.createElement('div');
+        list.className = 'bin-group-cards';
+        g.append(head, list);
+        groups[b] = list;
+        cards.appendChild(g);
+      });
+    }
     clips.forEach((clip, i) => {
       const card = document.createElement('div');
       card.className = 'bin-card' + (clip.id === this.engine.selectedId ? ' selected' : '');
@@ -459,7 +562,11 @@ class TimelinePanel {
       const bar = document.createElement('div');
       bar.className = 'bin-band-bar';
 
-      card.append(rank, thumb, bar, meta, tags);
+      const member = document.createElement('span');
+      member.className = 'bin-member';
+      member.textContent = tagOf.get(clip.id) || '';
+      member.title = 'Band member: band letter + rank within the band';
+      card.append(rank, member, thumb, bar, meta, tags);
       const select = () => {
         this.engine.select(clip.id);
         if (this.app.sidebar) this.app.sidebar.open('assets');
@@ -484,7 +591,7 @@ class TimelinePanel {
         card.classList.remove('dragging');
         this.showInsert(-1);
       });
-      cards.appendChild(card);
+      (grouped ? groups[clip.band] || groups.any : cards).appendChild(card);
     });
     // Story Mode: Hook first, Result / CTA last, as fixed markers (D-45).
     const story = this.engine.storyAssets();
@@ -604,7 +711,8 @@ class TimelinePanel {
     c.addEventListener('dblclick', () => { this.view.fit = true; });
   }
 
-  initSplitter() {
+  // Replaced by Workspace (D-84); kept for reference only.
+  initSplitterOld() {
     const split = document.getElementById('panelSplitter');
     const editor = document.getElementById('editorPanel');
     const KEY = 'djv.editorHeight';
@@ -632,10 +740,28 @@ class TimelinePanel {
     });
   }
 
+  get ROWS() {
+    const ws = this.app.workspace;
+    if (!ws) return this.ROWS_DEFAULT;
+    return { ruler: 28, master: ws.laneHeight('master'), clips: ws.laneHeight('clips'), voice: ws.laneHeight('voice'), text: ws.laneHeight('text') };
+  }
+
   resizeCanvas() {
     const dpr = window.devicePixelRatio || 1;
     const w = this.canvas.clientWidth;
-    const h = this.ROWS.ruler + this.ROWS.master + this.ROWS.clips + (this.app.voice.isLoaded ? this.ROWS.voice : 0) + (this.app.text.items.length ? this.ROWS.text : 0);
+    const R = this.ROWS;
+    const lanes = [['ruler', true], ['master', true], ['clips', true], ['voice', this.app.voice.isLoaded], ['text', this.app.text.items.length > 0]];
+    let y = 0;
+    const laid = [];
+    lanes.forEach(([name, on]) => {
+      const ch = document.querySelector(`.ch-${name}`);
+      if (ch) ch.style.height = `${R[name]}px`;
+      if (!on) return;
+      laid.push({ name, y, h: R[name] });
+      y += R[name];
+    });
+    const h = y;
+    if (this.app.workspace) this.app.workspace.renderGrips(laid);
     this.canvas.style.height = `${h}px`;
     this.canvas.width = Math.max(1, Math.round(w * dpr));
     this.canvas.height = Math.round(h * dpr);
@@ -658,6 +784,7 @@ class TimelinePanel {
     const showingId = showing ? showing.clip.id : null;
     if (showingId !== this.shownId) { this.shownId = showingId; this.markShowing(); }
     this.draw();
+    this.renderMembers();
   }
 
   updateView() {
@@ -933,7 +1060,68 @@ class TimelinePanel {
     ctx.lineWidth = 1;
   }
 
+  // Compact band strip (D-85): exactly the recorded cut list, one block per
+  // cut in its clip's band colour, labelled with the band member tag
+  // (B1 / M1 / H1 / A1); a thin second row below for the over stream.
+  drawBandStrip(ctx, C, x, W, y, h, now) {
+    const { start, span } = this.view;
+    const top = y + 4, sh = h - 18, oy = y + h - 11, oh = 7;
+    const fill = { bass: C.bass, mid: C.mid, high: C.high, any: C.steel2 };
+    const ink = { bass: this.color('--bass-ink'), mid: this.color('--mid-ink'), high: this.color('--high-ink'), any: C.ink };
+    const tags = this.engine.memberTags();
+    const current = this.engine.current && this.engine.current.segment;
+    // over-stream row
+    ctx.fillStyle = C.a(0.06);
+    ctx.fillRect(0, oy, W, oh);
+    ctx.lineWidth = 0.75;
+    ctx.font = '700 9px "JetBrains Mono", monospace';
+    ctx.textBaseline = 'middle';
+    const drawn = [];
+    for (const seg of this.engine.segments) {
+      const end = seg.end == null ? now : seg.end;
+      if (end <= seg.start || end < start || seg.start > start + span) continue;
+      const clip = this.engine.clipById(seg.clipId);
+      const over = seg.stream === 'over';
+      drawn.push({ seg, end, over });
+      const x0 = x(seg.start), x1 = x(end), w = Math.max(1, x1 - x0);
+      const by = over ? oy : top, bh = over ? oh : sh;
+      const band = clip && ClipEngine.BANDS.includes(clip.band) ? clip.band : 'any';
+      ctx.fillStyle = seg.story ? C.ink : fill[band];
+      ctx.fillRect(x0, by, w, bh);
+      ctx.strokeStyle = C.ink;
+      ctx.strokeRect(Math.round(x0) + 0.5, by + 0.5, Math.max(1, Math.round(w) - 1), bh - 1);
+      if (!over && w > 16) {
+        const label = seg.story ? ({ hook: 'HOOK', result: 'RES', cta: 'CTA' })[seg.story] : (tags.get(seg.clipId) || '');
+        if (label && ctx.measureText(label).width + 6 < w) {
+          ctx.fillStyle = seg.story ? C.paper : ink[band];
+          ctx.fillText(label, x0 + 3, by + bh / 2 + 0.5);
+        }
+      }
+      if (seg === current) {
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = C.live;
+        ctx.strokeRect(Math.round(x0) + 0.5, by - 1.5, Math.max(1, Math.round(w) - 1), bh + 2);
+        ctx.lineWidth = 0.75;
+      }
+    }
+    this.stripDrawn = drawn;   // what the strip shows (tests)
+    // Story positions still to come (track mode plan).
+    if (this.engine.settings.storyMode) {
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = C.live;
+      for (const b of this.engine.storyBlocks()) {
+        if (b.start <= now || b.start > start + span) continue;
+        ctx.strokeRect(Math.round(x(b.start)) + 0.5, top + 0.5, Math.max(1, x(b.end) - x(b.start) - 1), sh - 1);
+      }
+      ctx.setLineDash([]);
+    }
+    ctx.lineWidth = 1;
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = '600 10px "Inter Tight", sans-serif';
+  }
+
   drawClips(ctx, C, x, W, y, h, now) {
+    if (!(this.app.workspace && this.app.workspace.state.clipsExpanded)) { this.drawBandStrip(ctx, C, x, W, y, h, now); return; }
     const { start, span } = this.view;
     const top = y + 7, bh = h - 14;
     const bandCol = { bass: C.bass, mid: C.mid, high: C.high };

@@ -105,6 +105,22 @@ class ClipEngine {
   static clipDefaults() { return { used: { start: 0, end: null }, speed: 1, sections: [], fitBars: null }; }
   static SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 4];
 
+  // Band members (v2.4, D-85/D-86): each stack clip's tag — B1, B2 … M1 …
+  // H1 … A1 (Any) — ranked within its band by stack position.
+  static BANDS = ['bass', 'mid', 'high', 'any'];
+  static BAND_LETTER = { bass: 'B', mid: 'M', high: 'H', any: 'A' };
+  bandMembers() {
+    const out = { bass: [], mid: [], high: [], any: [] };
+    this.stack.forEach(c => (out[c.band] || out.any).push(c));
+    return out;
+  }
+  memberTags() {
+    const tags = new Map();
+    const m = this.bandMembers();
+    Object.entries(m).forEach(([b, list]) => list.forEach((c, i) => tags.set(c.id, `${ClipEngine.BAND_LETTER[b]}${i + 1}`)));
+    return tags;
+  }
+
   // Assets that own a file (sections read their parent's).
   get mediaAssets() { return this.assets.filter(a => !a.parent); }
 

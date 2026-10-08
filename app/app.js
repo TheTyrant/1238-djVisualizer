@@ -51,6 +51,7 @@ class DJVisualizerApp {
     this.clipEngine.grid = this.tempo;
     this.fastPass = new FastPass(this);
     this.timeline = new TimelinePanel(this);
+    this.workspace = new Workspace(this);   // lane sizes etc. (D-84)
     this.sessionStart = null;   // live-mode session clock (performance.now at start)
     this.sessionElapsed = 0;
 
@@ -247,6 +248,7 @@ class DJVisualizerApp {
       this.applyMusicLevel();
     });
 
+    this.workspace.init();
     this.timeline.init();
 
     // Files dropped outside a drop target must not make the browser open

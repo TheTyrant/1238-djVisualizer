@@ -22,6 +22,10 @@
   --mid:       #1F9D55;
   --high:      #2F5BD3;
   --live:      #E5322D;
+  /* Text on a band colour, >= 4.5:1 (D-83): bass 4.55, mid 4.98, high 5.90 */
+  --bass-ink:  #FFFFFF;
+  --mid-ink:   #1A1A1A;
+  --high-ink:  #FFFFFF;
   --ink-strong: #000000;                    /* primary button hover            */
   --surface-glass:   rgba(237, 234, 228, 0.82);
   --surface-glass-2: rgba(237, 234, 228, 0.92);
@@ -74,6 +78,9 @@
   --mid:       #3DCB80;
   --high:      #5C8DFF;
   --live:      #FF4A42;
+  --bass-ink:  #0F1012;   /* 6.29 */
+  --mid-ink:   #0F1012;   /* 9.11 */
+  --high-ink:  #0F1012;   /* 6.08 */
   --ink-strong: #FFFFFF;
   --surface-glass:   rgba(23, 24, 27, 0.86);
   --surface-glass-2: rgba(23, 24, 27, 0.94);
@@ -1314,3 +1321,82 @@ button.bin-dur.is-set { background: var(--ink); color: var(--paper); }
 .sect-list .hint { list-style: none; margin-left: -18px; }
 .sect-foot { display: flex; justify-content: flex-end; gap: 8px; }
 .sect-foot .btn { height: 30px; padding: 0 16px; }
+
+/* ---- Workspace (v2.4 step 3) ------------------------------------------ */
+/* Timeline area scrolls when its lanes are taller than the room (D-84). */
+.editor-main { grid-template-rows: auto 7px minmax(0, 1fr); }
+.editor-main.has-bin-h { grid-template-rows: minmax(0, 1fr) 7px var(--bin-h); }
+.tl-area {
+  grid-column: 1 / -1; display: grid; grid-template-columns: 112px 1fr;
+  position: relative; min-height: 0; overflow-y: auto; overflow-x: hidden;
+}
+.lane-grips { position: absolute; left: 0; right: 0; top: 0; height: 0; z-index: 2; }
+.lane-grip { position: absolute; left: 0; right: 0; height: 6px; cursor: row-resize; }
+.lane-grip:hover, .lane-grip.dragging { background: var(--high); opacity: 0.45; }
+.lane-split {
+  grid-column: 1 / -1; cursor: row-resize; background: var(--surface);
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  background-image: linear-gradient(90deg, var(--ink) 0 0); background-size: 28px 1px;
+  background-repeat: no-repeat; background-position: center; touch-action: none;
+}
+.lane-split:hover, .lane-split.dragging { background-color: var(--steel); }
+.area-split { touch-action: none; }
+.ch-expand { font-size: 9px; }
+
+/* Band-coloured cards (D-83): the label strip takes the band colour;
+   text uses the --*-ink tokens (>= 4.5:1 in both skins). Any stays neutral. */
+.bin-card[data-band="bass"] { --band-bg: var(--bass); --band-ink: var(--bass-ink); }
+.bin-card[data-band="mid"]  { --band-bg: var(--mid);  --band-ink: var(--mid-ink); }
+.bin-card[data-band="high"] { --band-bg: var(--high); --band-ink: var(--high-ink); }
+.bin-card[data-band="bass"] .bin-meta, .bin-card[data-band="mid"] .bin-meta, .bin-card[data-band="high"] .bin-meta,
+.bin-card[data-band="bass"] .bin-tags, .bin-card[data-band="mid"] .bin-tags, .bin-card[data-band="high"] .bin-tags {
+  background: var(--band-bg); color: var(--band-ink);
+}
+.bin-card[data-band] .bin-meta .bin-dur, .bin-card[data-band] .bin-tags .bin-tag-text { color: inherit; }
+.bin-card[data-band="bass"] .bin-sect, .bin-card[data-band="mid"] .bin-sect, .bin-card[data-band="high"] .bin-sect,
+.bin-card[data-band="bass"] button.bin-dur, .bin-card[data-band="mid"] button.bin-dur, .bin-card[data-band="high"] button.bin-dur { color: var(--band-ink); border-color: var(--band-ink); }
+.bin-card[data-band="bass"] button.bin-dur.is-set, .bin-card[data-band="mid"] button.bin-dur.is-set, .bin-card[data-band="high"] button.bin-dur.is-set { background: var(--band-ink); color: var(--band-bg); }
+.bin-member {
+  position: absolute; top: 0; left: 0; z-index: 1; padding: 1px 5px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+  background: var(--band-bg, var(--paper)); color: var(--band-ink, var(--ink)); border: 1px solid var(--line); border-top: none; border-left: none;
+}
+
+/* Action Editor grouped by band (Clip order = By band, D-86) */
+.bin-cards.grouped { gap: 10px; }
+.bin-group { display: flex; flex-direction: column; gap: 4px; min-width: 60px; padding: 0 4px 0 0; border-right: 1px dashed var(--line); }
+.bin-group:last-child { border-right: none; }
+.bin-group-head { display: flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
+.bin-group-cards { display: flex; gap: 8px; flex: 1; min-height: 0; }
+.bin-group.drop-target { outline: 2px dashed var(--high); outline-offset: 2px; }
+.band-swatch { width: 10px; height: 10px; flex: none; border: 1px solid var(--line); background: var(--steel); }
+.band-swatch.bass { background: var(--bass); } .band-swatch.mid { background: var(--mid); } .band-swatch.high { background: var(--high); }
+
+/* Auto-Editor panel (D-86): Global edit + Band members */
+.ae-global { border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 12px; }
+.ae-global > summary {
+  cursor: pointer; list-style: none; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--ink-2); display: flex; align-items: center; gap: 6px;
+}
+.ae-global > summary::-webkit-details-marker { display: none; }
+.ae-global > summary::before { content: "\25B8"; font-size: 9px; }
+.ae-global[open] > summary::before { content: "\25BE"; }
+.ae-global[open] > summary { margin-bottom: 4px; }
+.band-members { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--line); }
+.bm-row { display: grid; grid-template-columns: 10px 42px 18px 1fr; align-items: center; gap: 6px; padding: 5px 6px; border-bottom: 1px solid var(--hair); font-family: var(--font-mono); font-size: 10px; }
+.bm-row:last-child { border-bottom: none; }
+.bm-row.is-hot { background: var(--ink); color: var(--paper); }
+.bm-row.is-hot .bm-label::after { content: " \25CF"; color: var(--live); }
+.bm-label { text-transform: uppercase; letter-spacing: 0.06em; }
+.bm-count { text-align: right; color: inherit; opacity: 0.8; }
+.bm-chips { display: flex; flex-wrap: wrap; gap: 3px; min-width: 0; }
+.bm-chip {
+  height: 18px; padding: 0 5px; border: 1px solid currentColor; background: transparent; color: inherit; cursor: pointer;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
+}
+.bm-chip:hover, .bm-chip:focus-visible { background: var(--high); color: var(--high-ink); border-color: var(--high); }
+.bm-chip.on-air { background: var(--live); color: #fff; border-color: var(--live); }
+.bm-chip.selected { outline: 2px solid var(--high); outline-offset: 1px; }
+.bm-empty { color: var(--ink-3); }
+.bm-row.is-hot .bm-empty { color: inherit; opacity: 0.7; }
+.bin-card.showing::after { left: 30px; }   /* ON AIR sits after the member tag */

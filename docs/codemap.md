@@ -32,6 +32,7 @@ app/
   fastPass.js              Fast pass: whole-song offline analysis through the frozen AudioProcessor; fills record + cut list (D-80)
   tempoPanel.js            Header TEMPO readout/menu + fast-pass progress row in the Status overlay (D-80, D-81)
   clipTools.js             Amount-used range popover + Sections editor (filmstrip over a bar ruler) (D-82)
+  workspace.js             Layout record (editor / Action Editor / lane heights), drag handles, clip-lane expand (D-84)
   mediaLibrary.js          Linked-media fingerprints, remembered file handles (IndexedDB), reconnect by folder / files
   projectFile.js           .mnt project files: save / open / restore / reconnect / pack media
   zip64.js                 ZIP64 writer (streamed, stored) + reader (index only, slices); TempDisk (OPFS) for Firefox saves / exports (D-66)
@@ -50,6 +51,7 @@ tests/
   run.js                   Headless runner (puppeteer-core + installed Chrome/Edge): node tests/run.js tests/<file>.js
   alpha-open.js            An alpha (format 1) project opens with the same cuts, settings and frames (fixtures/alpha-v1.mnt)
   fastpass.js              Step 1: fast pass, tempo grid, ×2/÷2/type-in, played-wins, refill, cancel, never-played export
+  workspace.js             Step 3: card contrast, band strip = cut list, member tags, handles + reset + remembered, AE panel, group by band
   clipmodel.js             Step 2: amount used, sections, speed, Fit to bars, export frames + pitch, save/reopen, Sections editor by mouse
 test-assets/
   generate.html            Makes labelled test clips (WebM) + a 120 BPM test track (WAV) in-browser
@@ -325,6 +327,15 @@ Tokens in `:root`: `--surface #EDEAE4 · --panel #E3DFD7 · --steel #D7DADC · -
 | `ClipEngine.rate(el, sp)` / `keepInRange()` | Live playback rate (pitch follows) and looping inside the used part |
 | Segments | `speed`, `range` recorded per cut; `OfflineRenderer.clipTime()` = in + elapsed × speed, wrapped in `range`; story sound resampled in `mixChunk` (`rate`) |
 | `ClipTools.openRange(a, anchor)` / `openSections(a)` / `barSource(a)` / `filmstrip(p)` | UI: range popover; Sections overlay (canvas: filmstrip, bar ruler, markers) |
+
+### 3.7m Workspace — `app/workspace.js` + `TimelinePanel` — ✅ *(v2.4 step 3, D-83–D-86)*
+| Member | Role |
+|---|---|
+| `Workspace.state` / `laneHeight(name)` / `drag()` / `renderGrips(lanes)` | Layout record in `localStorage['bssmnt.layout']`; handles `#panelSplitter`, `#binSplitter`, `.lane-grip` |
+| `TimelinePanel.ROWS` (getter) / `resizeCanvas()` | Lane heights from the workspace; channel headers sized to match |
+| `drawBandStrip()` / `stripDrawn` | Compact clip lane (exact cut list, band colour, member tags, over row) |
+| `ClipEngine.bandMembers()` / `memberTags()` | B1 / M1 / H1 / A1 by band and stack position |
+| `renderMembers()` / `groupAt()` / `dropInGroup()` | Band members readout; grouped Action Editor drag (rank / band) |
 
 ### 3.11 Invariants
 1. `audioProcessor.js` is never modified. *(v2.4: the fast pass drives a second instance with simulated inputs; it never patches the class.)*

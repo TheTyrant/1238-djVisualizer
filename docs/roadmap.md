@@ -140,7 +140,7 @@ Supersedes parts of the v2.1 layout (the v2.1 table below describes it as it was
 |---|---|
 | 1 ✅ | **Fast pass + fixed tempo grid** (D-80, D-81): whole song analysed on load through the frozen processor; unplayed parts get motion and cuts; cuts on one grid from 0:00; TEMPO readout with ÷2 ×2, type-in, tap, live clock |
 | 2 ✅ | **Clip model** (D-82): amount used, bar-marker sections as child cards, speed ¼–4× (pitch follows), Fit to bars |
-| 3 | **Workspace:** band-coloured cards, resizable lanes, compact band strip, AE panel (Global edit, Band members, group by band) |
+| 3 ✅ | **Workspace** (D-83–D-86): band-coloured cards, resizable lanes, compact band strip, AE panel (Global edit, Band members, group by band) |
 | 4 | **Placement model + over stream:** shared placement for layers, images and titles; images over video; title locks and trend presets |
 | 5 | **Per-clip visual mode** (Replace / Over, on a transparent layer) |
 | 6 | **Timeline:** select / scrub / loop a range, Selection export, master fades |

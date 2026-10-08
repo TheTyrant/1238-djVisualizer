@@ -511,6 +511,30 @@ The brief's four questions were not answered before the build. Rather than guess
   - Test: 0:00–0:12 into 4 bars at 120 BPM → 1.5×, every cut exactly 8 s, and the export shows source 1.5 / 6 / 10.5 s at 1 / 4 / 7 s. Locked as Hook, 3 bars = exactly 6 s, and 4 bars is held to the cap (7.5 s of a 30 s song).
 - **Old projects:** no `used` / `speed` / `sections` = whole clip at 1×, no sections (checked in `tests/alpha-open.js`).
 
+
+### D-83 · Band-coloured cards *(Accepted — built)*
+- **Decision** (brief #8): a card's label strip (name, time, tags) takes its band's colour. The text on it uses new tokens `--bass-ink` / `--mid-ink` / `--high-ink`, chosen for at least 4.5:1:
+  - light skin: white on bass (4.55) and high (5.90), near-black on mid (4.98);
+  - dark skin: near-black on all three (6.29 / 9.11 / 6.08).
+  - Measured on the rendered cards in `tests/workspace.js`. **Any** stays neutral.
+- Each card also shows its band member tag (B1, M2 …) top-left.
+- *Proposed — needs Omar:* the colour is the clip's **assigned** band (its Band setting). It is not the band that happened to trigger a given cut; that one is shown in Band members (D-86).
+
+### D-84 · Resizable lanes, remembered *(Accepted — built)*
+- **Decision** (brief #9): there are drag handles between the viewport and the editor, between the timeline and the Action Editor, and on each lane's lower edge (master, clips when expanded, voice, text). Double-click any handle to reset it.
+- The layout is one record of heights (`bssmnt.layout`: editor, Action Editor, lane heights, clip lane expanded, Global edit open). It lives in this build's own storage, so Stable05 and the alpha don't share it. The alpha's old editor height is read once.
+- The timeline area scrolls when its lanes are taller than the room. Lane headers follow the lane heights.
+
+### D-85 · Clip lane = compact band strip *(Accepted — built)*
+- **Decision** (brief #10): by default the clip lane is a 38 px strip that draws exactly the recorded cut list. Each cut is a block in its clip's band colour, labelled with the clip's member tag where it fits (B1 / M1 / H1 / A1, ranked within the band by stack position). Strokes are 0.75 px, and the cut on air is outlined in red.
+- A thin second row holds over-stream blocks (D-87).
+- The ▸ / ▾ button in the lane header switches to the full lane (thumbnails, names, transitions), and the choice is remembered.
+
+### D-86 · Auto-Editor panel: Global edit, Band members, group by band *(Accepted — built)*
+- **Global edit** (brief #11) is a collapsible section (open state remembered) holding Switch timing / Pace, Clip order, Transition + band map, and In-point.
+- **Band members**, at the top of the panel: one row per band with its swatch, how many clips, and a chip per member. Clicking a chip selects that card. The row lights up while that band triggered the cut on air (the dominant band at that cut).
+- **Clip order = By band** groups the Action Editor by band. Dragging within a group changes the rank. Dragging into another group changes the clip's band and places it where it was dropped. Other orders show the single stack as before.
+
 ## I. Known carry-overs (pre-existing on `main`, not changed)
 - Placeholder text drawn with `p.text()` in WebGL mode doesn't render, because no font is loaded (affects the Media Layers "Upload images…" prompt). v2 uses a DOM overlay for its own hints.
 - `visualizer.js` has duplicate `drawAudioWaves` / `drawMandala` / `drawTunnel` definitions (the later ones win), plus unused snake-game code.

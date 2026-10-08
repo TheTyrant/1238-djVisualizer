@@ -9,6 +9,10 @@ Built on branch `v2.4`. Installs beside the alpha with its own settings.
 - **Amount used:** click a clip card's time to choose the part of the clip the Auto-Editor may use (e.g. 0:20–0:32). Locked clips play exactly that part.
 - **Sections:** split a clip on bar markers in a filmstrip editor (click to add, drag to snap to bars, right-click to delete). Each section gets its own card, with its own pace, band, speed and lock, and the video isn't copied.
 - **Speed:** ¼× to 4× per clip or section (presets or a number), with the clip's sound changing pitch to match, live and in the export. **Fit to bars** sets the speed so the used part fills exactly N bars.
+- **Band-coloured cards** (readable in both skins) with band member tags (B1, M2 …).
+- **Resizable workspace:** drag between the viewport and the editor, between the timeline and the Action Editor, or a lane's lower edge; double-click to reset. Sizes are remembered.
+- **Band strip:** the clip lane is a compact strip of every cut in its band colour and tag, with a row for clips over the video; ▸ shows the full lane.
+- **Auto-Editor:** "Global edit" folds away; **Band members** shows each band's clips and lights the band behind the cut on air (click a chip to select the clip). With Clip order = By band, the Action Editor groups clips by band; drag between groups to change a clip's band.
 - **Fixed tempo grid:** in track mode, cuts follow one grid from 0:00, the same every time the song loads — no more "Listening for tempo…". The header shows the tempo ("97 BPM · median"). Use ÷2, ×2, type a tempo, Tap (or **T**), Detected, or Live clock (the old behaviour).
 
 ### Changed
