@@ -223,3 +223,25 @@ await page.mouse.click(geo.x8, geo.y, { button: 'right' }); await sleep(200);
 const s3 = await E(() => djApp.clipEngine.mediaAssets[0].sections.slice());
 await E(() => djApp.clipTools.closeSections());
 ok('Sections editor: click adds on a bar line, drag snaps to bars, right-click deletes', geo.bar === 2 && s1.join() === '6' && s2.join() === '8' && cards2.length === 2 && s3.length === 0, `bar ${geo.bar} s · click → ${s1} · drag → ${s2} (${cards2.join(', ')}) · right-click → [${s3}]`);
+
+// 6) Live: two sections of one video blend with the band transitions
+// (each section has its own player on the same file).
+const blend = await E(async () => {
+  const e = djApp.clipEngine, p = e.mediaAssets[0];
+  e.setSpeed(p.id, 1);
+  e.setSections(p.id, [20]);
+  e.settings.transitionMode = 'crossfade';
+  djApp.seekMaster(1); await djApp.toggleAudio();
+  let seen = null;
+  for (let i = 0; i < 120 && !seen; i++) {
+    await new Promise(r => setTimeout(r, 50));
+    if (e.transition && e.outgoing && e.current && e.outgoing.clip.parent === p.id && e.current.clip.parent === p.id && e.outgoing.clip !== e.current.clip) {
+      const a = e.outgoing.clip.el, b = e.current.clip.el;
+      seen = { def: e.transition.def.id, separate: a !== b, aT: +a.currentTime.toFixed(2), bT: +b.currentTime.toFixed(2), playing: !a.paused && !b.paused };
+    }
+  }
+  await djApp.toggleAudio();
+  e.settings.transitionMode = 'jump';
+  return seen;
+});
+ok('live: a crossfade between two sections of one video shows both (own players, same file)', blend && blend.def === 'crossfade' && blend.separate && blend.playing && Math.abs(blend.aT - blend.bT) > 5, JSON.stringify(blend));

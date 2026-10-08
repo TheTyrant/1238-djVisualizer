@@ -198,6 +198,34 @@ class ClipEngine {
     this.emit('clips');
   }
 
+  // The section's own <video> on its parent's file, made when first needed
+  // (and again if the parent is reconnected to another file).
+  sectionPlayer(c) {
+    const pp = this.clipById(c.parent);
+    const p = this.viz.p5Instance;
+    if (!pp || !pp.url || !pp.ready || !p) return null;
+    if (c._player && c._player.url === pp.url) return c._player;
+    this.dropSectionPlayer(c);
+    const media = p.createVideo([pp.url]);
+    media.hide();
+    media.volume(0);
+    media.elt.muted = true;
+    media.elt.loop = true;
+    media.elt.playsInline = true;
+    media.elt.preload = 'auto';
+    c._player = { url: pp.url, media, el: media.elt, bridge: pp.rotation ? VideoOrientation.bridge(p, media) : null };
+    return c._player;
+  }
+
+  dropSectionPlayer(c) {
+    const pl = c._player;
+    if (!pl) return;
+    if (pl.bridge) pl.bridge.remove();
+    try { pl.el.pause(); } catch (e) { /* gone */ }
+    pl.media.remove();
+    c._player = null;
+  }
+
   // A section clip: its own settings; media, file and size come from the
   // parent (read through, never copied).
   addSection(p, k, saved = {}) {
@@ -212,8 +240,14 @@ class ClipEngine {
       ownThumb: null,
     };
     const engine = this;
-    ['file', 'url', 'media', 'el', 'bridge', 'duration', 'width', 'height', 'rotation', 'ready', 'error', 'offline', 'ref', 'path', 'origin'].forEach(k2 => {
+    ['file', 'url', 'duration', 'width', 'height', 'rotation', 'ready', 'error', 'offline', 'ref', 'path', 'origin'].forEach(k2 => {
       Object.defineProperty(c, k2, { enumerable: true, configurable: true, get() { const pp = engine.clipById(c.parent); return pp ? pp[k2] : (k2 === 'offline' ? true : null); }, set() { /* the parent's */ } });
+    });
+    // Live, each section has its own player on the parent's file (no copy
+    // of the media), so a blend between two sections of one video shows
+    // both pictures and follows the band transitions (Omar, 2026-10-08).
+    ['media', 'el', 'bridge'].forEach(k2 => {
+      Object.defineProperty(c, k2, { enumerable: true, configurable: true, get() { const own = engine.sectionPlayer(c); return own ? own[k2] : null; }, set() { /* own player */ } });
     });
     Object.defineProperty(c, 'thumb', { enumerable: true, configurable: true, get() { const pp = engine.clipById(c.parent); return c.ownThumb || (pp ? pp.thumb : null); }, set(v) { c.ownThumb = v; } });
     this.assets.push(c);
@@ -402,6 +436,7 @@ class ClipEngine {
     if (this.current && this.current.clip === clip) this.current = null;
     if (this.outgoing && this.outgoing.clip === clip) { this.outgoing = null; this.transition = null; }
     if (this.pending && this.pending.clip === clip) this.pending = null;
+    if (clip.parent) this.dropSectionPlayer(clip);
     if (!clip.parent) {
       if (clip.layer && !clip.offline) this.viz.clearLayerMedia(clip.layer);
       if (clip.bridge) clip.bridge.remove();
