@@ -197,6 +197,7 @@ class OfflineRenderer {
 
       onProgress({ stage: 'Preparing media', done: 0, total: 1 });
       const scene = await this.prepareScene(M, W, H);
+      scene.dt = 1 / fps;
       const mix = acodec ? await this.prepareAudio(scene.edl, M) : null;
 
       // Range on the master timeline; the file starts at 0.
@@ -214,7 +215,7 @@ class OfflineRenderer {
         // Audio is mixed a chunk at a time, slightly ahead of the video.
         while (mix && audioDone < duration && audioDone <= t + 1) {
           const to = Math.min(duration, audioDone + OfflineRenderer.AUDIO_CHUNK);
-          await audioSource.add(await this.mixChunk(mix, start + audioDone, start + to));
+          await audioSource.add(this.edgeFade(await this.mixChunk(mix, start + audioDone, start + to), audioDone, duration, opts.edgeFades));
           audioDone = to;
         }
         await this.renderFrame(scene, start + t, fctx, W, H);
@@ -228,7 +229,7 @@ class OfflineRenderer {
       }
       while (mix && audioDone < duration) {
         const to = Math.min(duration, audioDone + OfflineRenderer.AUDIO_CHUNK);
-        await audioSource.add(await this.mixChunk(mix, start + audioDone, start + to));
+        await audioSource.add(this.edgeFade(await this.mixChunk(mix, start + audioDone, start + to), audioDone, duration, opts.edgeFades));
         audioDone = to;
       }
       onProgress({ stage: 'Finishing', done: total, total });
@@ -297,6 +298,7 @@ class OfflineRenderer {
   }
 
   disposeScene(scene) {
+    if (scene.vlayer) scene.vlayer.remove();
     scene.sources.forEach(s => s.dispose && s.dispose());
     scene.p.remove();
     scene.host.remove();
@@ -438,6 +440,7 @@ class OfflineRenderer {
     const ov = (scene.over || []).find(s => s.start <= t && s.end > t);
     const oa = ov && engine.clipById(ov.clipId);
     scene.overFrame = oa && oa.file ? { g: await this.imageGraphics(scene, oa.file, `img:${oa.id}`), clip: oa, alpha: ClipEngine.overAlpha(ov, t) } : null;
+    scene.curSeg = cur;
     scene.clipFrame = {
       cur: await handle(cur, 'a'),
       out: out ? await handle(out, out.clipId === (cur && cur.clipId) ? 'b' : 'a') : null,
@@ -473,6 +476,11 @@ class OfflineRenderer {
       else drawClip(cf.cur);
     }
     p.noTint();
+    // Per-clip visual mode recorded on the cut (D-90), same layer code as live.
+    if (scene.curSeg && scene.curSeg.visual) {
+      if (!scene.vlayer) scene.vlayer = new VisualLayer();
+      scene.vlayer.draw(p, scene.viz, scene.curSeg.visual, scene.curSeg, scene.dt || 1 / 30);
+    }
     if (this.app.clipEngine.settings.overlayLayers) scene.viz.drawReactiveLayers(p);
     // Over stream: same placement as live, at this frame's breakpoint.
     const of = scene.overFrame;
@@ -582,7 +590,7 @@ class OfflineRenderer {
       // Fades follow the mode that was on screen at each moment.
       const rec = app.record;
       const modeAt = (t) => { const f = rec.frame(Math.round(t * SessionRecord.FPS)); return f ? f.mode : app.visualizer.currentMode; };
-      parts.push({ buffer: await this.decode(app.trackSource.file), at: 0, offset: 0, level: (t) => app.storyFadeLevel(t, modeAt(t)) });
+      parts.push({ buffer: await this.decode(app.trackSource.file), at: 0, offset: 0, level: (t) => app.musicLevelAt(t, modeAt(t)) });   // story fades × master fades (D-92)
     }
     const v = app.voice;
     if (v.isLoaded && v.blob && !v.muted) {
@@ -601,6 +609,29 @@ class OfflineRenderer {
       if (buf) parts.push({ buffer: buf, at: s.start, offset: s.inPoint, length: s.end - s.start, gain: 1, rate: s.speed || 1, until: s.range ? s.range[1] : null });
     }
     return parts;
+  }
+
+  // Edge fades on a Selection export (D-92): the whole mix fades in at the
+  // start and out at the end, with the master fades' shapes and lengths
+  // (1 bar, Smooth unless set). b0 = where this buffer starts in the file.
+  edgeFade(buf, b0, total, edge) {
+    if (!edge) return buf;
+    const app = this.app, F = app.masterFade;
+    const Li = app.fadeSeconds(F.in), Lo = app.fadeSeconds(F.out);
+    const si = DJVisualizerApp.FADE_SHAPES[F.in.shape] || DJVisualizerApp.FADE_SHAPES.smooth;
+    const so = DJVisualizerApp.FADE_SHAPES[F.out.shape] || DJVisualizerApp.FADE_SHAPES.smooth;
+    const sr = buf.sampleRate, n = buf.length;
+    for (let c = 0; c < buf.numberOfChannels; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < n; i++) {
+        const t = b0 + i / sr;
+        let g = 1;
+        if (t < Li) g = Math.min(g, si(t / Li));
+        if (t > total - Lo) g = Math.min(g, so(Math.max(0, (total - t) / Lo)));
+        if (g < 1) d[i] *= g;
+      }
+    }
+    return buf;
   }
 
   // Sequential reader for a long recording: hands out the decoded pieces

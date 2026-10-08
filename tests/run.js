@@ -22,7 +22,8 @@ const CANDIDATES = [
   if (!exe) throw new Error('Chrome or Edge not found (set CHROME=…)');
   const browser = await puppeteer.launch({
     executablePath: exe, headless: 'new',
-    args: ['--autoplay-policy=no-user-gesture-required', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--enable-webgl', '--ignore-gpu-blocklist', '--window-size=1600,1000'],
+    // GPU=1: draw on the graphics card (speed checks), else software WebGL.
+    args: ['--autoplay-policy=no-user-gesture-required', '--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--enable-webgl', '--ignore-gpu-blocklist', ...(process.env.GPU ? ['--enable-gpu', '--use-angle=d3d11'] : []), '--window-size=1600,1000'],
     defaultViewport: { width: 1600, height: 1000 },
   });
   let fails = 0, passes = 0;

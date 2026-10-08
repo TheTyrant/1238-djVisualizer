@@ -41,6 +41,8 @@ Ctrl+Shift+S       Save project as…
 Ctrl+O             Open project
 Ctrl+N             New project (desktop app; in a browser Alt+N)
 R                  Reset the bass / mid / high sensitivity to 1.0
+L                  Loop the timeline selection (drag on the ruler to
+                   select; Shift extends; Esc clears)
 T                  Tap tempo (track mode, 4 taps or more). The TEMPO readout in the
                    header also has ÷2, ×2, type a tempo, Detected and Live clock.
 ?                  Show / hide help

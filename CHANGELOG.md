@@ -16,6 +16,11 @@ Built on branch `v2.4`. Installs beside the alpha with its own settings.
 - **Placement** for Media Layers and images: anchor, position, size, rotation, opacity, fit, blend and music reaction, with a separate layout per display shape. Drag it on the viewport. Existing layers look exactly as before.
 - **Images over video:** an image can play *over* the video (new images do by default) while the videos keep cutting underneath; one at a time, faded in and out. A locked image (Hook / Result / CTA) can sit over the video too.
 - **Titles:** Screen lock (anchor + offset, drag it on the viewport), optional 9:16 safe areas (shown faintly while editing), and a lock that makes a title follow the Hook, Result or CTA. **Trend presets:** Bold stack, Word by word (on the beat), Highlight word, Lower third, Track-in, Mask reveal; they export exactly as seen.
+- **Visual per clip:** a clip or section can show a visual mode (Galaxy, Mandala, Spectrum Bars …) over the video or instead of it while it's on air, with a clear, trailing or solid background and an optional colour tint — live and in the export.
+- **Mandala** draws faster (about 3× quicker to export).
+- **Timeline selection:** drag on the ruler to select (snaps to beats; Shift extends, Esc clears), L loops it, and Export can export just the Selection, with optional edge fades.
+- **Scrubbing:** drag on the timeline to see what was recorded at any point. It no longer changes the cut list.
+- **Master fade in / out** (F on the Master lane): Linear, Smooth or Snap, in bars or seconds; heard live and in the export.
 - **Fixed tempo grid:** in track mode, cuts follow one grid from 0:00, the same every time the song loads — no more "Listening for tempo…". The header shows the tempo ("97 BPM · median"). Use ÷2, ×2, type a tempo, Tap (or **T**), Detected, or Live clock (the old behaviour).
 
 ### Changed

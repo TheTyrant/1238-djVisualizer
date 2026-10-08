@@ -105,7 +105,22 @@ class ClipEngine {
   //   pace 'fit' + fitBars: set by Fit to bars — holds exactly N bars and
   //            plays its used part once from the start.
   // Defaults reproduce the alpha: whole clip, 1×, no sections.
-  static clipDefaults() { return { used: { start: 0, end: null }, speed: 1, sections: [], fitBars: null }; }
+  static clipDefaults() { return { used: { start: 0, end: null }, speed: 1, sections: [], fitBars: null, visual: VisualLayer.defaults() }; }
+
+  // Per-clip visual mode (D-90): recorded on each cut so the export draws
+  // what was seen.
+  static visualOf(clip) {
+    const v = clip && clip.visual;
+    return v && v.mode && v.mode !== 'none' ? { ...v } : undefined;
+  }
+  setVisual(id, patch) {
+    const a = this.clipById(id);
+    if (!a) return;
+    a.visual = { ...VisualLayer.defaults(), ...(a.visual || {}), ...patch };
+    // the cut on air shows the change at once
+    if (this.current && this.current.clip === a) this.current.segment.visual = ClipEngine.visualOf(a);
+    this.emit('clips');
+  }
   static SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 4];
 
   // Band members (v2.4, D-85/D-86): each stack clip's tag — B1, B2 … M1 …
@@ -274,6 +289,7 @@ class ClipEngine {
       importance: saved.importance != null ? saved.importance : this.clips.length + 1,
       story: saved.story || 'none', storyHold: 3, fade: { on: false, curve: 'smooth', bars: 1, ...(saved.fade || {}) },
       used: saved.used ? { ...saved.used } : { start: 0, end: null }, speed: saved.speed || 1, sections: [], fitBars: saved.fitBars || null,
+      visual: { ...VisualLayer.defaults(), ...(saved.visual || {}) },
       ownThumb: null,
     };
     const engine = this;
@@ -451,6 +467,7 @@ class ClipEngine {
       used: saved.used ? { ...saved.used } : { start: 0, end: null }, speed: saved.speed || 1,
       sections: Array.isArray(saved.sections) ? saved.sections.slice() : [], fitBars: saved.fitBars || null,
       show: saved.show || 'full',   // alpha images open as Full frame (D-88)
+      visual: { ...VisualLayer.defaults(), ...(saved.visual || {}) },
       placement: saved.placement ? JSON.parse(JSON.stringify(saved.placement)) : (saved.kind === 'image' ? Placement.defaults({ size: 60, z: 10 }) : null),
     };
     this.assets.push(asset);
@@ -639,6 +656,8 @@ class ClipEngine {
   update(audioData) {
     this.trackBands(audioData);
     if (!this.isAdvancing()) return;
+    // Rolling again after a scrub: take the new position now (D-91).
+    if (this.pendingSeek != null) { const t = this.pendingSeek; this.pendingSeek = null; this.scrubbing = false; this.seekTo(t); }
     this.keepInRange(this.current);
     if (this.clips.length === 0 && !this.storyBlocks().length) return;
 
@@ -916,6 +935,7 @@ class ClipEngine {
         clipId: a.id, start: t, end: null, inPoint: a.kind === 'video' ? r.start + into * sp : into, transition: 'jump',
         band: this.dominant, beat: this.beatIndex, story: block.role, blendSec: 0, pass: this.pass,
         speed: sp, range: a.kind === 'video' ? [r.start, r.end] : null,
+        visual: ClipEngine.visualOf(a),
       };
       this.segments.push(segment);
       this.current = { clip: a, segment };
@@ -1091,6 +1111,7 @@ class ClipEngine {
       clipId: next.clip.id, start: now, end: null, inPoint: next.inPoint,
       transition: def.id, band, beat: this.beatIndex,
       pace: next.clip.pace, holdBeats: hold, pass: this.pass,
+      visual: ClipEngine.visualOf(next.clip),
     };
     if (next.clip.kind === 'video') {
       const r = this.usedRange(next.clip);
@@ -1227,7 +1248,9 @@ class ClipEngine {
       p.pop();
     };
 
-    if (!this.current) {
+    if (this.scrubbing && !this.isAdvancing() && this.drawRecordedAt(p, drawClip)) {
+      // scrubbing: the recorded cut at the playhead (D-91)
+    } else if (!this.current) {
       // Not rolling yet: show the first clip's frame as a preview.
       const first = this.clips.find(c => c.ready);
       if (first) drawClip(first, { alpha: 0.35 });
@@ -1246,8 +1269,39 @@ class ClipEngine {
     }
     p.noTint();
 
+    // Per-clip visual mode (D-90), between the clip and the over stream.
+    if (this.current && this.current.clip.visual && this.current.clip.visual.mode !== 'none') {
+      if (!this.vlayer) this.vlayer = new VisualLayer();
+      const now = performance.now(), dt = this.vlast ? Math.min(0.1, (now - this.vlast) / 1000) : 1 / 60;
+      this.vlast = now;
+      this.vlayer.draw(p, this.viz, this.current.clip.visual, this.current.segment, dt);
+    }
     if (this.settings.overlayLayers && this.viz.drawReactiveLayers) this.viz.drawReactiveLayers(p);
     this.drawOver(p);
+  }
+
+  // While scrubbing: the base cut recorded at the playhead, at the frame
+  // the export would show (in + elapsed × speed, wrapped in its range).
+  drawRecordedAt(p, drawClip) {
+    const t = this.clock();
+    const seg = this.segments.find(s => s.stream !== 'over' && s.start <= t && (s.end == null ? Infinity : s.end) > t);
+    const clip = seg && this.clipById(seg.clipId);
+    if (!clip || !clip.media) return false;
+    if (clip.kind === 'video' && clip.el) {
+      const dur = this.sourceLength(clip);
+      const want = OfflineRenderer.prototype.clipTime(seg, clip, t, dur);
+      if (!clip.el.paused) clip.el.pause();
+      if (Math.abs(clip.el.currentTime - want) > 0.04 && !clip.el.seeking) { try { clip.el.currentTime = want; } catch (e) { /* not seekable */ } }
+    }
+    // p5 doesn't refresh a paused, seeked video's texture: draw it through
+    // a 2D copy (the same bridge rotated phone video uses, D-54).
+    if (clip.kind === 'video' && !clip.bridge) {
+      if (!this.scrubBridges) this.scrubBridges = new Map();
+      let b = this.scrubBridges.get(clip.el);
+      if (!b) { b = VideoOrientation.bridge(this.viz.p5Instance, clip.media); this.scrubBridges.set(clip.el, b); }
+      drawClip(Object.assign(Object.create(clip), { bridge: b }));
+    } else drawClip(clip);
+    return true;
   }
 
   // The over stream (D-88): the image on air above the video, through its

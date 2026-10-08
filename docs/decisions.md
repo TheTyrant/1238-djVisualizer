@@ -579,6 +579,37 @@ The brief's four questions were not answered before the build. Rather than guess
 - All of it goes through `TextOverlay.render()`, so viewport, pop-out and export match. Tested: each preset exported and compared with the same frame drawn directly — mean difference 0.3–0.7 levels.
 - *Proposed — needs Omar:* the accent colours are fixed per preset (yellow plate, red bar, white line) until a colour control is wanted.
 
+
+### D-90 · Per-clip visual mode *(Accepted — built)*
+- **Decision** (brief #5): every clip and section has **Visual** — None, Spectrum Bars, Particles, Rings, Waves, Mandala, Tunnel, Galaxy or Polygons — with **Show**:
+  - **Over:** on its own transparent layer, above the clip;
+  - **Replace:** instead of the clip.
+- **The layer** (`app/visualLayer.js`): a WebGL graphic the mode draws into through the visualizer's own drawing functions. Spectrum Bars uses a 2D graphic with the export's canvas version (D-61), transparent between the bars; there's no SVG rewrite. The layer starts empty on each new cut.
+  - **Background None** clears it every frame.
+  - **Trail** fades what's there, alpha included (WebGL `REMOVE` blend / 2D `destination-out`), so motion leaves streaks and the clip shows through. The fade is by time (30/255 per 60 Hz frame), so a 30 fps export trails like the 60 Hz viewport.
+  - **Solid** fills it with a chosen colour.
+  - **Colour:** Default (the mode's own colours) or a custom tint.
+- Each cut records the visual (`segment.visual`), so the export draws what was played. Live and export use the same class.
+- **Mandala batched:** 8 rings × 12 spokes are now one `LINES` shape per ring instead of 96 `line()` calls. Each ring keeps its own colour and weight, so it looks the same. The roadmap's speed test had it at 0.77× real time; a 1080p Mandala export now runs at 2.5× here (GPU), checked in `tests/visual.js`.
+- *Proposed — needs Omar:* "one shape" is one per ring (8), not one for all 96 spokes, because the rings have different line weights. A single shape would make every spoke the same thickness.
+- Tested (`tests/visual.js`): Galaxy Over shows the video beneath with no black box, live and in an export; Trail covers 2.7× more of the layer than None; Replace hides the clip; the visual survives save / reopen.
+
+
+### D-91 · Timeline: select, scrub, loop, Selection export *(Accepted — built)*
+- **Select** (brief #3): drag on the ruler to select a range, shown on every lane with its length ("00:16.0 · 8 bars").
+  - It snaps to the beats of the tempo grid; Alt drags freely.
+  - **Shift** moves the nearest edge; **Esc** clears it.
+- **Scrub:** clicking or dragging on the lanes moves the playhead and shows the recorded picture there, drawn through a 2D copy, because p5 doesn't refresh a paused, seeked video. It **never changes the cut list**: the engine takes the new position only when playback starts (tested: six scrub positions, cut list identical). Transport Stop / Home still seek as before.
+- **L** loops the selection while playing; the label shows LOOP.
+- **Export → Range → Selection** exports exactly the selection, with an optional **Edge fades** (the whole mix fades in and out at its edges, with the master fades' shapes and lengths, 1 bar Smooth unless set). Never-played selections export with motion (fast pass, D-80). Tested: an 8-bar selection at 120 BPM exports 16.000 s; first 0.15 s RMS 0.0009 vs 0.12 in the middle, full again one bar in.
+- *Proposed — needs Omar:* edge fades act on the **sound** only; the picture isn't faded to black.
+
+### D-92 · Master track fade in / fade out *(Accepted — built)*
+- **Fades** (brief #4): the **F** button on the Master lane opens Fade in / Fade out. Each has on/off, a shape (Linear / Smooth / Snap: the D-59 curves) and a length in bars (of the tempo grid) or seconds. They're saved with the project.
+- **Applied on the music bus after the analyser** (D-36: `musicGain`, so BPM, bands and cuts still hear the full track) and in the export mixdown, both through `musicLevelAt(t)` = story fades × master fades.
+- The ramps are drawn over the Master lane in yellow.
+- Tested: Smooth 1-bar in + Linear 2 s out give levels 0 / 0.5 / 1 … 0.5 / 0 at the expected times, and the live music bus follows.
+
 ## I. Known carry-overs (pre-existing on `main`, not changed)
 - Placeholder text drawn with `p.text()` in WebGL mode doesn't render, because no font is loaded (affects the Media Layers "Upload images…" prompt). v2 uses a DOM overlay for its own hints.
 - `visualizer.js` has duplicate `drawAudioWaves` / `drawMandala` / `drawTunnel` definitions (the later ones win), plus unused snake-game code.

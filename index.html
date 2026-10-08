@@ -123,7 +123,8 @@
                   </div>
                   <div class="field">
                     <label for="exportRange">Range</label>
-                    <select id="exportRange"><option value="all" selected>Whole timeline</option><option value="played">Played part only</option></select>
+                    <select id="exportRange"><option value="all" selected>Whole timeline</option><option value="played">Played part only</option><option value="selection">Selection</option></select>
+                      <label class="prop-check" id="exportEdgeRow" hidden><input type="checkbox" id="exportEdge" checked><span>Edge fades (the master fade shapes)</span></label>
                   </div>
                   <div class="field-row">
                     <div class="field">
@@ -516,7 +517,7 @@
               <div class="tl-area" id="tlArea">
               <div class="channels">
                 <div class="ch ch-ruler"></div>
-                <div class="ch ch-master"><div class="ch-row"><span class="ch-name">Master</span><button class="ch-mute" id="muteMaster" type="button" aria-pressed="false" title="Mute the music (left out of exports)">M</button></div><span class="ch-sub" id="chMasterSub">Live input</span></div>
+                <div class="ch ch-master"><div class="ch-row"><span class="ch-name">Master</span><span class="ch-btns"><button class="ch-mute" id="masterFadesBtn" type="button" aria-pressed="false" aria-haspopup="dialog" title="Fade in / fade out (track)">F</button><button class="ch-mute" id="muteMaster" type="button" aria-pressed="false" title="Mute the music (left out of exports)">M</button></span></div><span class="ch-sub" id="chMasterSub">Live input</span></div>
                 <div class="ch ch-clips"><div class="ch-row"><span class="ch-name">Clips</span><button class="ch-mute ch-expand" id="clipsExpand" type="button" aria-pressed="false" title="Show the clip lane full size (thumbnails, names) or as a compact band strip">&#x25B8;</button></div><span class="ch-sub" id="chClipsSub">Strip + over</span></div>
                 <div class="ch ch-voice" id="chVoice" hidden><div class="ch-row"><span class="ch-name">Voice</span><button class="ch-mute" id="muteVoice" type="button" aria-pressed="false" title="Mute the voice (left out of exports)">M</button></div><span class="ch-sub" id="chVoiceSub">—</span></div>
                 <div class="ch ch-text" id="chText" hidden><span class="ch-name">Text</span><span class="ch-sub">Titles</span></div>
@@ -555,6 +556,7 @@
           <p><kbd>Shift</kbd>+<kbd>A</kbd> - Auto-Editor (edit controls)</p>
           <p><kbd>Ctrl</kbd>+<kbd>S</kbd> - Save &middot; <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> - Save as &middot; <kbd>Ctrl</kbd>+<kbd>O</kbd> - Open &middot; <kbd>Ctrl</kbd>+<kbd>N</kbd> - New project (browser: <kbd>Alt</kbd>+<kbd>N</kbd>)</p>
           <p><kbd>R</kbd> - Reset All Gains to 1.0</p>
+          <p>Drag the timeline ruler to select a range (<kbd>Shift</kbd> extends) &middot; <kbd>L</kbd> - Loop the selection &middot; <kbd>Esc</kbd> - Clear it</p>
           <p><kbd>T</kbd> - Tap tempo (track mode; 4 taps or more) &middot; TEMPO in the header: &divide;2, &times;2, type a tempo, Live clock</p>
           <p><kbd>?</kbd> - Show/Hide This Help</p>
         </div>
@@ -600,6 +602,7 @@
     <script src="app/renderer.js?v=2.13.0"></script>
     <script src="app/displaySize.js?v=2.13.0"></script>
     <script src="app/placement.js?v=2.13.0"></script>
+    <script src="app/visualLayer.js?v=2.13.0"></script>
     <script src="app/placeHandle.js?v=2.13.0"></script>
     <script src="app/exportPanel.js?v=2.13.0"></script>
     <script src="app/scope.js?v=2.13.0"></script>

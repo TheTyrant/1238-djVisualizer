@@ -1283,43 +1283,36 @@ class DJVisualizer {
   }
 
   drawMandala(p) {
-    // Rotating mandala pattern with fallback animation
-    p.push();
-    p.rotateZ(this.time * 0.5);
-    
-    const layers = 8;
+    // Rotating mandala: 8 rings of 12 spokes. Batched (v2.4, D-90): one
+    // LINES shape per ring instead of 96 separate line() calls, so it draws
+    // (and exports) in real time. Each ring keeps its own colour and weight,
+    // so it looks as before.
+    const layers = 8, spokes = 12, base = this.time * 0.5;
     for (let layer = 0; layer < layers; layer++) {
-      p.push();
-      p.rotateZ(layer * 0.3 + this.time);
-      
-      const spokes = 12;
-      for (let i = 0; i < spokes; i++) {
-        p.push();
-        p.rotateZ((i / spokes) * p.TWO_PI);
-        
-        // Color based on frequency bands with fallback animation
-        let color, intensity;
-        if (layer < layers * 0.33) {
-          intensity = this.audioData.bass || Math.sin(this.time * 2 + layer) * 0.3;
-          color = [...this.colors.bass, 100 + intensity * 155];
-        } else if (layer < layers * 0.66) {
-          intensity = this.audioData.mid || Math.sin(this.time * 3 + layer) * 0.3;
-          color = [...this.colors.mid, 100 + intensity * 155];
-        } else {
-          intensity = this.audioData.high || Math.sin(this.time * 4 + layer) * 0.3;
-          color = [...this.colors.high, 100 + intensity * 155];
-        }
-        
-        p.stroke(...color);
-        p.strokeWeight(1 + intensity * 3);
-        
-        const radius = 50 + layer * 30 + intensity * 50;
-        p.line(0, 0, radius, 0);
-        p.pop();
+      let color, intensity;
+      if (layer < layers * 0.33) {
+        intensity = this.audioData.bass || Math.sin(this.time * 2 + layer) * 0.3;
+        color = [...this.colors.bass, 100 + intensity * 155];
+      } else if (layer < layers * 0.66) {
+        intensity = this.audioData.mid || Math.sin(this.time * 3 + layer) * 0.3;
+        color = [...this.colors.mid, 100 + intensity * 155];
+      } else {
+        intensity = this.audioData.high || Math.sin(this.time * 4 + layer) * 0.3;
+        color = [...this.colors.high, 100 + intensity * 155];
       }
-      p.pop();
+      const radius = 50 + layer * 30 + intensity * 50;
+      const rot = base + layer * 0.3 + this.time;
+      p.stroke(...color);
+      p.strokeWeight(1 + intensity * 3);
+      p.noFill();
+      p.beginShape(p.LINES);
+      for (let i = 0; i < spokes; i++) {
+        const a = rot + (i / spokes) * p.TWO_PI;
+        p.vertex(0, 0);
+        p.vertex(radius * Math.cos(a), radius * Math.sin(a));
+      }
+      p.endShape();
     }
-    p.pop();
   }
 
   drawTunnel(p) {

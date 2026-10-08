@@ -1,3 +1,7 @@
+function App_masterFadeDefaults() {
+  return { in: { on: false, shape: 'smooth', len: 1, unit: 'bars' }, out: { on: false, shape: 'smooth', len: 1, unit: 'bars' } };
+}
+
 class DJVisualizerApp {
   // Number keys for visualization modes, in menu order; 0 = clip editor.
   static MODE_KEYS = {
@@ -38,6 +42,10 @@ class DJVisualizerApp {
     this.display = new DisplaySize(this);        // header SIZE + breakpoints (D-63)
     this.eqMode = 'sensitivity';
     this.musicMuted = false;
+    // Master track fades (v2.4, D-92): shape = the D-59 curves; length in
+    // bars (of the tempo grid) or seconds. On the music bus after the
+    // analyser, and in the mixdown.
+    this.masterFade = App_masterFadeDefaults();
 
     // Clip auto-editor + bottom timeline panel
     this.clipEngine = new ClipEngine(this.visualizer);
@@ -202,7 +210,15 @@ class DJVisualizerApp {
           break;
         case 'Escape':
           e.preventDefault();
+          { const help = document.getElementById('helpOverlay'); if (this.timeline.selection && !(help && help.style.display === 'block')) { this.timeline.setSelection(null); break; } }
           this.hideHelp();
+          break;
+        case 'KeyL':
+          // Loop the timeline selection (D-91)
+          if (!this.timeline.selection) break;
+          e.preventDefault();
+          this.timeline.looping = !this.timeline.looping;
+          this.notify(this.timeline.looping ? 'Looping the selection (L to stop)' : 'Loop off');
           break;
       }
     });
@@ -235,7 +251,7 @@ class DJVisualizerApp {
 
       // Auto Fade Music follows the master time every frame while it's on.
       // Auto Fade Music follows the master time while any locked clip uses it.
-      const fading = this.clipEngine.assets.some(a => a.story !== 'none' && a.fade && a.fade.on);
+      const fading = this.masterFadeOn() || this.clipEngine.assets.some(a => a.story !== 'none' && a.fade && a.fade.on);
       if (fading || this._wasFading) this.applyMusicLevel();
       this._wasFading = fading;
     };
@@ -602,8 +618,39 @@ class DJVisualizerApp {
   // analyser (D-36). Only the track file plays through BSSMNT; live input
   // comes from the DJ's own rig, so there is nothing to mute there.
   applyMusicLevel() {
-    const level = this.musicMuted ? 0 : this.storyFadeLevel(this.masterTime());
+    const level = this.musicMuted ? 0 : this.musicLevelAt(this.masterTime());
     this.trackSource.setMusicLevel(level, 0.05);
+  }
+
+  // The music level at master time t: story fades × master fades (D-92).
+  musicLevelAt(t, mode = this.visualizer.currentMode) {
+    return this.storyFadeLevel(t, mode) * this.masterFadeLevel(t);
+  }
+
+  static FADE_SHAPES = { linear: (x) => x, smooth: (x) => x * x * (3 - 2 * x), snap: (x) => Math.pow(x, 0.25) };
+
+  fadeSeconds(f) {
+    if (f.unit === 's') return Math.max(0.05, +f.len || 0);
+    const bpm = this.tempo.bpm > 0 ? this.tempo.bpm : (this.visualizer.audioData.bpm || 0);
+    const bar = bpm > 0 ? (60 / bpm) * MusicalTime.beatsPerBar() : 2;
+    return Math.max(0.05, (+f.len || 1) * bar);
+  }
+
+  masterFadeOn() { return this.isTrackMode() && (this.masterFade.in.on || this.masterFade.out.on); }
+
+  masterFadeLevel(t) {
+    if (!this.isTrackMode()) return 1;
+    const F = this.masterFade, dur = this.trackSource.duration || 0;
+    let lvl = 1;
+    if (F.in.on) { const L = this.fadeSeconds(F.in); if (t < L) lvl = Math.min(lvl, (DJVisualizerApp.FADE_SHAPES[F.in.shape] || DJVisualizerApp.FADE_SHAPES.smooth)(Math.max(0, t / L))); }
+    if (F.out.on && dur > 0) { const L = this.fadeSeconds(F.out); if (t > dur - L) lvl = Math.min(lvl, (DJVisualizerApp.FADE_SHAPES[F.out.shape] || DJVisualizerApp.FADE_SHAPES.smooth)(Math.max(0, (dur - t) / L))); }
+    return lvl;
+  }
+
+  setMasterFade(which, patch) {
+    this.masterFade[which] = { ...this.masterFade[which], ...patch };
+    this.applyMusicLevel();
+    this.project.markDirty();
   }
 
   // Auto Fade Music to Story Blocks (D-37): the music fades out over 1 bar
@@ -949,6 +996,17 @@ class DJVisualizerApp {
     this.clipEngine.reset();
     this.timeline.resetSession();
     if (this.live && !this.live.recording) this.live.discard();   // a new session replaces the live take
+  }
+
+  // Scrub (D-91): move the playhead and show the recorded picture there,
+  // without touching the cut list. The engine takes the new position when
+  // playback starts.
+  scrubTo(seconds) {
+    if (!this.isTrackMode()) return;
+    this.trackSource.seek(seconds);
+    this.record.breakContinuity();
+    this.clipEngine.pendingSeek = this.trackSource.currentTime;
+    this.clipEngine.scrubbing = true;
   }
 
   seekMaster(seconds) {

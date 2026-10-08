@@ -1436,3 +1436,10 @@ button.bin-dur.is-set { background: var(--ink); color: var(--paper); }
 /* Titles (D-89): Screen lock offset X / Y side by side */
 .prop-row-3:has(#textOx) { grid-template-columns: 72px 1fr 1fr; }
 #textOx, #textOy { min-width: 0; width: 100%; }
+
+/* Timeline (v2.4 step 6): master fades popover */
+.ch-btns { display: inline-flex; gap: 3px; }
+.fade-pop { width: 360px; }
+.fade-row { display: grid; grid-template-columns: 1fr 86px 56px 64px; gap: 6px; align-items: center; }
+.fade-row select, .fade-row input[type="number"] { height: 26px; min-width: 0; font-size: 11px; }
+#masterFadesBtn[aria-pressed="true"] { background: #ffd400; border-color: #ffd400; color: #111; }

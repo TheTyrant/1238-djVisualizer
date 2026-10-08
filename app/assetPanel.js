@@ -262,6 +262,7 @@ class AssetPanel {
     }
     if (a.kind === 'video' && !this.engine.isSplit(a)) P.appendChild(this.timingControls(a));
     else if (this.engine.isSplit(a)) P.appendChild(this.splitNote(a));
+    if ((a.asClip || a.parent) && !this.engine.isSplit(a)) P.appendChild(this.visualControls(a));
 
     // Per-asset status (D-43)
     const st = this.group('Status');
@@ -358,6 +359,49 @@ class AssetPanel {
     sect.title = 'Split the clip on bar markers; each section becomes its own card';
     sect.addEventListener('click', () => this.app.clipTools.openSections(a));
     g.appendChild(sect);
+    return g;
+  }
+
+  // Per-clip visual mode (D-90): a visual mode while this clip is on air,
+  // instead of it (Replace) or on top of it (Over).
+  visualControls(a) {
+    const e = this.engine, v = { ...VisualLayer.defaults(), ...(a.visual || {}) };
+    const g = this.group('Visual');
+    g.classList.add('visual-group');
+    const set = (patch) => e.setVisual(a.id, patch);
+    g.appendChild(this.row('Mode', this.select(VisualLayer.MODES, v.mode, (m) => set({ mode: m }), 'propVisual', 'A visual mode while this clip is on air')));
+    if (v.mode === 'none') return g;
+    const show = document.createElement('div');
+    show.className = 'seg seg-btns';
+    show.id = 'propVisualShow';
+    show.setAttribute('role', 'radiogroup');
+    [['over', 'Over'], ['replace', 'Replace']].forEach(([k, label]) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.textContent = label; b.dataset.v = k;
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', String(v.show === k));
+      if (v.show === k) b.classList.add('on');
+      b.title = k === 'over' ? 'On its own transparent layer, over the clip' : 'Instead of the clip';
+      b.addEventListener('click', () => set({ show: k }));
+      show.appendChild(b);
+    });
+    g.appendChild(this.row('Show', show, 'div'));
+    const bgRow = document.createElement('div');
+    bgRow.className = 'react-row';
+    const col = document.createElement('input');
+    col.type = 'color'; col.id = 'propVisualSolid'; col.value = v.solid || '#000000';
+    col.disabled = v.bg !== 'solid';
+    col.addEventListener('change', () => set({ solid: col.value }));
+    bgRow.append(this.select([['none', 'None (clear)'], ['trail', 'Trail'], ['solid', 'Solid']], v.bg, (b) => set({ bg: b }), 'propVisualBg', 'None = cleared every frame · Trail = motion leaves streaks · Solid = a colour'), col);
+    g.appendChild(this.row('Background', bgRow, 'div'));
+    const tintRow = document.createElement('div');
+    tintRow.className = 'react-row';
+    const tint = document.createElement('input');
+    tint.type = 'color'; tint.id = 'propVisualTint'; tint.value = v.tint || '#ffffff';
+    tint.disabled = !v.tint;
+    tint.addEventListener('change', () => set({ tint: tint.value }));
+    tintRow.append(this.select([['default', 'Default'], ['custom', 'Custom tint']], v.tint ? 'custom' : 'default', (k) => set({ tint: k === 'custom' ? (v.tint || '#ffd400') : null }), 'propVisualColour', 'The mode’s own colours, or tinted'), tint);
+    g.appendChild(this.row('Colour', tintRow, 'div'));
     return g;
   }
 

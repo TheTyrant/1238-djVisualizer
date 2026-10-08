@@ -217,7 +217,7 @@ class ProjectFile {
         assets.push({
           id: a.id, parent: a.parent, section: a.section, of: a.of, name: a.name, kind: a.kind,
           asClip: a.asClip, band: a.band, pace: a.pace, importance: a.importance, story: a.story, fade: { ...(a.fade || {}) },
-          used: { ...a.used }, speed: a.speed, fitBars: a.fitBars,
+          used: { ...a.used }, speed: a.speed, fitBars: a.fitBars, visual: { ...(a.visual || VisualLayer.defaults()) },
         });
         continue;
       }
@@ -240,6 +240,7 @@ class ProjectFile {
         rotation: a.rotation || 0, thumb,
         used: { ...(a.used || { start: 0, end: null }) }, speed: a.speed || 1, sections: (a.sections || []).slice(), fitBars: a.fitBars || null,
         show: a.show || 'full', placement: a.placement ? JSON.parse(JSON.stringify(a.placement)) : null,   // D-88
+        visual: { ...(a.visual || VisualLayer.defaults()) },   // D-90
       });
     }
     let voice = null;
@@ -282,6 +283,7 @@ class ProjectFile {
       },
       visualMode: viz.currentMode,
       tempo: app.tempo.toJSON(),   // D-81
+      masterFade: JSON.parse(JSON.stringify(app.masterFade)),   // D-92
       display: app.display ? app.display.key : 'original',
       engine: { settings: { ...e.settings }, bandTransitions: { ...e.bandTransitions } },
       layers,
@@ -486,6 +488,7 @@ Cancel = Save over it`);
     Object.assign(e.bandTransitions, project.engine.bandTransitions);
     // Tempo grid (D-81): projects from before Stable05 keep the live clock.
     app.tempo.fromJSON(project.tempo || null);
+    app.masterFade = project.masterFade ? { in: { ...App_masterFadeDefaults().in, ...project.masterFade.in }, out: { ...App_masterFadeDefaults().out, ...project.masterFade.out } } : App_masterFadeDefaults();
     document.querySelectorAll('#propBandMap select').forEach((sel, i) => { sel.value = e.bandTransitions[['bass', 'mid', 'high'][i]]; });
     app.timeline.syncProps();
     if (project.eq) {

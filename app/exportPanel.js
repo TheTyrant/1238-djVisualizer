@@ -11,13 +11,14 @@ class ExportPanel {
       size: $('exportSize'), range: $('exportRange'), fps: $('exportFps'), quality: $('exportQuality'),
       summary: $('exportSummary'), warnings: $('exportWarnings'), start: $('exportStart'),
       progress: $('exportProgress'), bar: $('exportBar'), status: $('exportStatus'), cancel: $('exportCancel'),
-      result: $('exportResult'),
+      result: $('exportResult'), edge: $('exportEdge'), edgeRow: $('exportEdgeRow'),
     };
     if (!this.el.start) return;
     Object.entries(OfflineRenderer.SIZES).forEach(([k, v]) => this.el.size.add(new Option(v.label, k)));
     this.el.size.value = '1080p';
     this.el.start.addEventListener('click', () => this.run());
     this.el.cancel.addEventListener('click', () => this.app.renderer.cancel());
+    this.el.range.addEventListener('change', () => this.refresh());
     if (!OfflineRenderer.supported()) {
       this.el.start.disabled = true;
       this.el.summary.textContent = 'This browser cannot encode video. Use Chrome or Edge.';
@@ -49,6 +50,15 @@ class ExportPanel {
       li.textContent = w;
       this.el.warnings.appendChild(li);
     });
+    // Selection (D-91): only with a range selected on the timeline.
+    const sel = this.app.timeline.selection;
+    const opt = this.el.range.querySelector('option[value="selection"]');
+    if (opt) {
+      opt.disabled = !sel;
+      opt.textContent = sel ? `Selection ${fmtTime(sel.a, true)}–${fmtTime(sel.b, true)}` : 'Selection (drag on the ruler)';
+      if (!sel && this.el.range.value === 'selection') this.el.range.value = 'all';
+    }
+    if (this.el.edgeRow) this.el.edgeRow.hidden = this.el.range.value !== 'selection';
     this.el.start.disabled = !plan.ok || this.app.renderer.busy;
   }
 
@@ -61,8 +71,11 @@ class ExportPanel {
     el.bar.style.width = '0%';
     el.status.textContent = MediaLibrary.canUse('showSaveFilePicker') ? 'Choose where to save…' : 'Preparing…';
     try {
+      const sel = this.app.timeline.selection;
+      const range = el.range.value === 'selection' && sel ? { start: sel.a, end: sel.b } : el.range.value;
       const res = await this.app.renderer.export({
-        size: el.size.value, range: el.range.value, fps: parseInt(el.fps.value, 10), quality: el.quality.value, name: this.app.project.name,
+        size: el.size.value, range, fps: parseInt(el.fps.value, 10), quality: el.quality.value, name: this.app.project.name,
+        edgeFades: el.range.value === 'selection' && el.edge && el.edge.checked,
       }, (p) => {
         el.bar.style.width = `${Math.round((p.done / p.total) * 100)}%`;
         if (p.stage === 'Rendering') {

@@ -142,8 +142,8 @@ Supersedes parts of the v2.1 layout (the v2.1 table below describes it as it was
 | 2 ✅ | **Clip model** (D-82): amount used, bar-marker sections as child cards, speed ¼–4× (pitch follows), Fit to bars |
 | 3 ✅ | **Workspace** (D-83–D-86): band-coloured cards, resizable lanes, compact band strip, AE panel (Global edit, Band members, group by band) |
 | 4 ✅ | **Placement model + over stream** (D-87–D-89): shared placement for layers, images and titles; images over video; title locks, safe areas and trend presets |
-| 5 | **Per-clip visual mode** (Replace / Over, on a transparent layer) |
-| 6 | **Timeline:** select / scrub / loop a range, Selection export, master fades |
+| 5 ✅ | **Per-clip visual mode** (D-90): Replace / Over on a transparent layer, None / Trail / Solid, tint; Mandala batched (2.5× real time at 1080p) |
+| 6 ✅ | **Timeline** (D-91, D-92): select / scrub / loop a range, Selection export with edge fades, master fade in / out |
 | 7 | **Verify, docs, build** `BSSMNT-Stable05-win-x64*` |
 
 ---

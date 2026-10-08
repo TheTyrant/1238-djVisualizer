@@ -38,6 +38,7 @@ class TimelinePanel {
     this.initProps();
     this.initBin();
     this.initCanvasInteraction();
+    this.initMasterFades();
 
     // Text lane appears once there is any text (D-60).
     this.app.text.on(() => {
@@ -686,9 +687,21 @@ class TimelinePanel {
         return;
       }
       if (!this.app.isTrackMode()) return;
-      dragging = true;
       c.setPointerCapture(e.pointerId);
-      this.app.trackSource.seek(timeAt(e));
+      // Ruler (D-91): drag to select a range (snapped to beats on the tempo
+      // grid; Alt = free); Shift moves the nearest edge of the selection.
+      if (e.clientY - r.top < this.ROWS.ruler) {
+        const t = this.snapT(timeAt(e), e.altKey);
+        const s = this.selection;
+        if (e.shiftKey && s) this.selDrag = { anchor: Math.abs(t - s.a) < Math.abs(t - s.b) ? s.b : s.a };
+        else this.selDrag = { anchor: t };
+        this.setSelection({ a: Math.min(this.selDrag.anchor, t), b: Math.max(this.selDrag.anchor, t) }, true);
+        return;
+      }
+      // Lanes: scrub — the playhead moves and shows what was recorded there;
+      // the cut list is never touched (the engine catches up on play).
+      dragging = true;
+      this.app.scrubTo(timeAt(e));
     });
     c.addEventListener('pointermove', (e) => {
       if (this.textDrag) {
@@ -701,7 +714,12 @@ class TimelinePanel {
         }
         return;
       }
-      if (dragging) this.app.trackSource.seek(timeAt(e));
+      if (this.selDrag) {
+        const t = this.snapT(timeAt(e), e.altKey);
+        this.setSelection({ a: Math.min(this.selDrag.anchor, t), b: Math.max(this.selDrag.anchor, t) }, true);
+        return;
+      }
+      if (dragging) this.app.scrubTo(timeAt(e));
     });
     c.addEventListener('pointerup', (e) => {
       if (this.textDrag) {
@@ -710,9 +728,15 @@ class TimelinePanel {
         if (moved) this.app.text.emit('change');
         return;
       }
+      if (this.selDrag) {
+        this.selDrag = null;
+        if (this.selection && this.selection.b - this.selection.a < 0.05) this.setSelection(null);
+        else this.setSelection(this.selection);
+        return;
+      }
       if (!dragging) return;
       dragging = false;
-      this.app.seekMaster(timeAt(e));
+      this.app.scrubTo(timeAt(e));
     });
     // Ctrl/Cmd+wheel zooms around the cursor, wheel pans (track mode).
     c.addEventListener('wheel', (e) => {
@@ -732,6 +756,132 @@ class TimelinePanel {
       this.view.fit = this.view.span >= dur;
     }, { passive: false });
     c.addEventListener('dblclick', () => { this.view.fit = true; });
+  }
+
+  // ---- master fades (D-92) ------------------------------------------------
+
+  initMasterFades() {
+    const btn = document.getElementById('masterFadesBtn');
+    if (!btn) return;
+    const pop = document.createElement('div');
+    pop.className = 'clip-pop fade-pop';
+    pop.id = 'masterFadesPop';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', 'Master fades');
+    pop.hidden = true;
+    document.body.appendChild(pop);
+    const render = () => {
+      const F = this.app.masterFade;
+      btn.setAttribute('aria-pressed', String(F.in.on || F.out.on));
+      pop.innerHTML = '<div class="clip-pop-head"><span class="clip-pop-k">Master fades</span><span class="clip-pop-name">music bus, after the analyser</span></div>';
+      ['in', 'out'].forEach(k => {
+        const f = F[k];
+        const row = document.createElement('div');
+        row.className = 'fade-row';
+        row.innerHTML = `<label class="prop-check"><input type="checkbox" id="fade${k}On" ${f.on ? 'checked' : ''}><span>Fade ${k}</span></label>
+          <select id="fade${k}Shape" aria-label="Shape"><option value="linear">Linear</option><option value="smooth">Smooth</option><option value="snap">Snap</option></select>
+          <input type="number" id="fade${k}Len" min="0.25" step="0.25" value="${f.len}" aria-label="Length">
+          <select id="fade${k}Unit" aria-label="Unit"><option value="bars">bars</option><option value="s">s</option></select>`;
+        row.querySelector('select[aria-label=Shape]').value = f.shape;
+        row.querySelector('select[aria-label=Unit]').value = f.unit;
+        row.querySelector('input[type=checkbox]').addEventListener('change', (e) => { this.app.setMasterFade(k, { on: e.target.checked }); render(); });
+        row.querySelector('select[aria-label=Shape]').addEventListener('change', (e) => this.app.setMasterFade(k, { shape: e.target.value }));
+        row.querySelector('input[type=number]').addEventListener('change', (e) => this.app.setMasterFade(k, { len: Math.max(0.25, parseFloat(e.target.value) || 1) }));
+        row.querySelector('select[aria-label=Unit]').addEventListener('change', (e) => this.app.setMasterFade(k, { unit: e.target.value }));
+        pop.appendChild(row);
+      });
+      const note = document.createElement('p');
+      note.className = 'clip-pop-note';
+      note.textContent = 'Shapes as the locked-clip fades (D-59). Also used for the edge fades of a Selection export.';
+      pop.appendChild(note);
+    };
+    btn.addEventListener('click', () => {
+      if (!pop.hidden) { pop.hidden = true; return; }
+      render();
+      pop.hidden = false;
+      const r = btn.getBoundingClientRect();
+      pop.style.left = `${Math.max(8, r.left)}px`;
+      pop.style.top = `${Math.max(8, r.top - pop.offsetHeight - 8)}px`;
+    });
+    document.addEventListener('pointerdown', (e) => { if (!pop.hidden && !pop.contains(e.target) && e.target !== btn) pop.hidden = true; });
+    this.renderFadesBtn = render;
+  }
+
+  // ---- selection (D-91) ----------------------------------------------------
+
+  snapT(t, free = false) {
+    const dur = this.app.trackSource.duration || 0;
+    t = Math.max(0, Math.min(dur || t, t));
+    const g = this.app.tempo;
+    if (free || !g.active) return t;
+    const b = Math.round(g.beatAt(t));
+    return Math.max(0, Math.min(dur || Infinity, g.timeOfBeat(b)));
+  }
+
+  // { a, b } seconds, or null. dragging = don't announce yet.
+  setSelection(sel, dragging = false) {
+    this.selection = sel && sel.b > sel.a ? { a: sel.a, b: sel.b } : null;
+    if (!this.selection) this.looping = false;
+    if (!dragging && this.app.exportPanel) this.app.exportPanel.refresh();
+  }
+
+  selectionLabel() {
+    const s = this.selection;
+    if (!s) return '';
+    const g = this.app.tempo, len = s.b - s.a;
+    const bars = g.bpm > 0 ? len / g.barSec : 0;
+    return `${fmtTime(len, true)}${bars ? ` · ${+bars.toFixed(2)} bar${Math.abs(bars - 1) < 1e-6 ? '' : 's'}` : ''}${this.looping ? ' · LOOP' : ''}`;
+  }
+
+  // While looping: past the end of the selection → back to its start.
+  loopCheck() {
+    const s = this.selection;
+    if (!this.looping || !s || !this.app.timelineRolling()) return;
+    const t = this.app.masterTime();
+    if (t >= s.b - 0.02 || t < s.a - 0.5) this.app.seekMaster(s.a);
+  }
+
+  drawSelection(ctx, C, x, H) {
+    const s = this.selection;
+    if (!s) return;
+    const x0 = x(s.a), x1 = x(s.b);
+    ctx.fillStyle = 'rgba(92, 141, 255, 0.14)';
+    ctx.fillRect(x0, 0, x1 - x0, H);
+    ctx.fillStyle = C.high;
+    ctx.fillRect(Math.round(x0), 0, 1, H);
+    ctx.fillRect(Math.round(x1) - 1, 0, 1, H);
+    ctx.fillRect(x0, 0, x1 - x0, 3);
+    const label = this.selectionLabel();
+    ctx.font = '700 9px "JetBrains Mono", monospace';
+    const tw = ctx.measureText(label).width + 8;
+    const lx = Math.max(0, Math.min(this.W - tw, x0 + 2));
+    ctx.fillStyle = C.high; ctx.fillRect(lx, 15, tw, 12);   // under the playhead time
+    ctx.fillStyle = '#ffffff'; ctx.fillText(label, lx + 4, 24);
+  }
+
+  // Master fades (D-92): the ramps over the Master lane.
+  drawFadeRamps(ctx, C, x, y, h) {
+    const app = this.app, F = app.masterFade;
+    if (!app.isTrackMode() || !(F.in.on || F.out.on)) return;
+    const dur = app.trackSource.duration || 0;
+    ctx.save();
+    ctx.strokeStyle = '#ffd400'; ctx.lineWidth = 1.5;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    const ramp = (t0, t1) => {
+      const n = 40;
+      ctx.beginPath();
+      ctx.moveTo(x(t0), y + h);
+      for (let i = 0; i <= n; i++) { const t = t0 + ((t1 - t0) * i) / n; ctx.lineTo(x(t), y + h - app.masterFadeLevel(t) * (h - 4)); }
+      ctx.lineTo(x(t1), y + h);
+      ctx.closePath();
+      ctx.fill();
+      ctx.beginPath();
+      for (let i = 0; i <= n; i++) { const t = t0 + ((t1 - t0) * i) / n; const yy = y + h - app.masterFadeLevel(t) * (h - 4); if (i) ctx.lineTo(x(t), yy); else ctx.moveTo(x(t), yy); }
+      ctx.stroke();
+    };
+    if (F.in.on) ramp(0, Math.min(dur, app.fadeSeconds(F.in)));
+    if (F.out.on && dur) ramp(Math.max(0, dur - app.fadeSeconds(F.out)), dur);
+    ctx.restore();
   }
 
   // Replaced by Workspace (D-84); kept for reference only.
@@ -806,6 +956,7 @@ class TimelinePanel {
     const showing = this.engine.nowShowing();
     const showingId = showing ? showing.clip.id : null;
     if (showingId !== this.shownId) { this.shownId = showingId; this.markShowing(); }
+    this.loopCheck();
     this.draw();
     this.renderMembers();
   }
@@ -918,7 +1069,7 @@ class TimelinePanel {
       if (st === 'no-clips') hint = 'Drop video clips into the Bin below';
       else if (st === 'unplayable') hint = 'Can’t decode these clips in this browser — open in Chrome or Edge';
       else if (st === 'waiting-bpm' && !this.engine.current) hint = 'Listening for tempo…';
-      else if (st === 'idle' && !this.engine.current) hint = 'Press play to start the auto-editor';
+      else if (st === 'idle' && !this.engine.current && !this.engine.scrubbing) hint = 'Press play to start the auto-editor';
     }
     this.el.hint.textContent = hint;
     this.el.hint.hidden = !hint;
@@ -982,9 +1133,12 @@ class TimelinePanel {
 
     this.drawRuler(ctx, C, x, W, R);
     this.drawMaster(ctx, C, x, W, yMaster, R.master, now);
+    this.drawFadeRamps(ctx, C, x, yMaster, R.master);
     this.drawClips(ctx, C, x, W, yClips, R.clips, now);
     if (this.app.voice.isLoaded) this.drawVoice(ctx, C, x, W, yClips + R.clips, R.voice);
     if (this.app.text.items.length) this.drawText(ctx, C, x, W, this.textLaneY(), R.text);
+
+    this.drawSelection(ctx, C, x, H);
 
     // Row rules
     ctx.fillStyle = C.ink;

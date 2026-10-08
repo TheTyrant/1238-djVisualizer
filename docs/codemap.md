@@ -32,6 +32,7 @@ app/
   fastPass.js              Fast pass: whole-song offline analysis through the frozen AudioProcessor; fills record + cut list (D-80)
   tempoPanel.js            Header TEMPO readout/menu + fast-pass progress row in the Status overlay (D-80, D-81)
   clipTools.js             Amount-used range popover + Sections editor (filmstrip over a bar ruler) (D-82)
+  visualLayer.js           Per-clip visual mode: transparent WebGL / 2D layer, None / Trail / Solid, tint (D-90)
   placement.js             Placement model + box maths + draw (anchor, offset, size, rotation, opacity, fit, blend, react, breakpoints) (D-87)
   placeHandle.js           Viewport drag handle for a layer / Over image placement (D-87)
   workspace.js             Layout record (editor / Action Editor / lane heights), drag handles, clip-lane expand (D-84)
@@ -54,6 +55,8 @@ tests/
   alpha-open.js            An alpha (format 1) project opens with the same cuts, settings and frames (fixtures/alpha-v1.mnt)
   fastpass.js              Step 1: fast pass, tempo grid, ×2/÷2/type-in, played-wins, refill, cancel, never-played export
   workspace.js             Step 3: card contrast, band strip = cut list, member tags, handles + reset + remembered, AE panel, group by band
+  timeline.js              Step 6: ruler select / Shift / Esc, scrub keeps the cut list, L loop, master fades, 8-bar Selection export with edge fades
+  visual.js                Step 5: Galaxy Over live + export (no black box), Trail, Replace, saved, Mandala export speed (GPU=1)
   titles.js                Step 4c: CTA-locked title follows the CTA, screen lock, 9:16 safe areas, presets export as drawn
   placement.js             Step 4: layers pixel-identical to the alpha, over stream, locked Over, 16:9 / 9:16 drag, export
   fixtures/legacy-layers.js  The alpha's Media Layer drawing, verbatim (reference for placement.js)
