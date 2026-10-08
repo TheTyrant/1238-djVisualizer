@@ -239,6 +239,7 @@ class ProjectFile {
         story: a.story, storyHold: a.storyHold, fade: { ...(a.fade || {}) }, duration: a.duration, width: a.width, height: a.height,
         rotation: a.rotation || 0, thumb,
         used: { ...(a.used || { start: 0, end: null }) }, speed: a.speed || 1, sections: (a.sections || []).slice(), fitBars: a.fitBars || null,
+        show: a.show || 'full', placement: a.placement ? JSON.parse(JSON.stringify(a.placement)) : null,   // D-88
       });
     }
     let voice = null;
@@ -265,7 +266,7 @@ class ProjectFile {
     const layers = {};
     ['background', 'bass', 'mid', 'high'].forEach(k => {
       const L = viz.layers[k];
-      layers[k] = { enabled: L.enabled, justify: L.justify, stack: L.stack };
+      layers[k] = { enabled: L.enabled, justify: L.justify, stack: L.stack, placement: L.placement ? JSON.parse(JSON.stringify(L.placement)) : null };   // placement: D-87
     });
     const project = {
       format: ProjectFile.FORMAT, version: ProjectFile.VERSION, app: 'BSSMNT DJ Visualizer',
@@ -502,7 +503,8 @@ Cancel = Save over it`);
       if (preset) preset.value = app.eq.isFlat ? 'flat' : 'custom';
       if (app.eqPanel) app.eqPanel.syncUI();
     }
-    Object.entries(project.layers || {}).forEach(([k, L]) => Object.assign(viz.layers[k], L));
+    // Alpha projects have no placement: the slot keeps drawing from justify / stack (D-87).
+    Object.entries(project.layers || {}).forEach(([k, L]) => Object.assign(viz.layers[k], { placement: null }, L));
     const modeSel = document.getElementById('visualMode');
     modeSel.value = project.visualMode || 'spectrum';
     modeSel.dispatchEvent(new Event('change'));

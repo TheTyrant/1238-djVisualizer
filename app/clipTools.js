@@ -152,7 +152,7 @@ class ClipTools {
           <span class="sect-bar" id="sectBar"></span>
         </div>
         <canvas class="sect-canvas" id="sectCanvas" width="960" height="150" aria-label="Clip filmstrip with bar ruler"></canvas>
-        <p class="hint">Click to add a marker on a bar line · drag a marker to move it (it snaps to bars) · right-click a marker to delete it. Each section becomes its own clip card.</p>
+        <p class="hint">Click to add a marker on a bar line · drag a marker to move it (it snaps to bars) · right-click a marker to delete it. Each section shows on the clip's card and gets its own pace, band and speed.</p>
         <ol class="sect-list" id="sectList"></ol>
         <div class="sect-foot">
           <button type="button" class="btn" id="sectClear">Clear sections</button>

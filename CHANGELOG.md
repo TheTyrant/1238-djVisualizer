@@ -7,12 +7,14 @@ Built on branch `v2.4`. Installs beside the alpha with its own settings.
 - **BSSMNT Stable05** installs next to the alpha (demoV2) with its own shortcuts, settings, recent list and crash recordings. The label shows in the window title and the help panel.
 - **Fast pass:** a loaded song is analysed in a few seconds (progress and Cancel in the Status overlay). The whole song gets motion and cuts before you press play; what you play replaces them as you go. **Refill from fast pass** (TEMPO menu) replaces what you played.
 - **Amount used:** click a clip card's time to choose the part of the clip the Auto-Editor may use (e.g. 0:20–0:32). Locked clips play exactly that part.
-- **Sections:** split a clip on bar markers in a filmstrip editor (click to add, drag to snap to bars, right-click to delete). Each section gets its own card, with its own pace, band, speed and lock, and the video isn't copied.
+- **Sections:** split a clip on bar markers in a filmstrip editor (click to add, drag to snap to bars, right-click to delete). The sections show as a strip on the clip's card; click one to give it its own pace, band, speed and lock. The video isn't copied, and at most two players per video are used live (like A / B decks).
 - **Speed:** ¼× to 4× per clip or section (presets or a number), with the clip's sound changing pitch to match, live and in the export. **Fit to bars** sets the speed so the used part fills exactly N bars.
 - **Band-coloured cards** (readable in both skins) with band member tags (B1, M2 …).
 - **Resizable workspace:** drag between the viewport and the editor, between the timeline and the Action Editor, or a lane's lower edge; double-click to reset. Sizes are remembered.
 - **Band strip:** the clip lane is a compact strip of every cut in its band colour and tag, with a row for clips over the video; ▸ shows the full lane.
 - **Auto-Editor:** "Global edit" folds away; **Band members** shows each band's clips and lights the band behind the cut on air (click a chip to select the clip). With Clip order = By band, the Action Editor groups clips by band; drag between groups to change a clip's band.
+- **Placement** for Media Layers and images: anchor, position, size, rotation, opacity, fit, blend and music reaction, with a separate layout per display shape. Drag it on the viewport. Existing layers look exactly as before.
+- **Images over video:** an image can play *over* the video (new images do by default) while the videos keep cutting underneath; one at a time, faded in and out. A locked image (Hook / Result / CTA) can sit over the video too.
 - **Fixed tempo grid:** in track mode, cuts follow one grid from 0:00, the same every time the song loads — no more "Listening for tempo…". The header shows the tempo ("97 BPM · median"). Use ÷2, ×2, type a tempo, Tap (or **T**), Detected, or Live clock (the old behaviour).
 
 ### Changed

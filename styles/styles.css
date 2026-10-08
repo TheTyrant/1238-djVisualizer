@@ -1400,3 +1400,36 @@ button.bin-dur.is-set { background: var(--ink); color: var(--paper); }
 .bm-empty { color: var(--ink-3); }
 .bm-row.is-hot .bm-empty { color: inherit; opacity: 0.7; }
 .bin-card.showing::after { left: 30px; }   /* ON AIR sits after the member tag */
+
+/* Placement (v2.4 step 4, D-87/D-88) */
+.place-handle { transform-origin: 50% 50%; }
+.placement-controls { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; border: 1px solid var(--hair); padding: 6px 8px 8px; }
+.placement-controls > summary { cursor: pointer; font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-2); }
+.placement-controls[open] > summary { margin-bottom: 4px; }
+.anchor-grid { display: grid; grid-template-columns: repeat(3, 22px); grid-template-rows: repeat(3, 18px); gap: 2px; }
+.anchor-grid button { padding: 0; border: 1px solid var(--line); background: var(--paper); cursor: pointer; position: relative; }
+.anchor-grid button::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; background: var(--ink-3); }
+.anchor-grid button.on { background: var(--ink); }
+.anchor-grid button.on::after { background: var(--paper); }
+.react-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+/* Cards (Omar, 2026-10-08): a taller info area at the expense of the
+   thumbnail; a clip with sections shows them as a strip here. */
+.bin-thumb { flex: 0.8 1 0; }
+.bin-meta { padding: 5px 6px 1px; }
+.bin-name { font-size: 12px; }
+.bin-dur, button.bin-dur { font-size: 10px; }
+.bin-tags { padding: 3px 6px 6px; font-size: 10px; }
+.bin-card[data-band="bass"], .bin-card[data-band="mid"], .bin-card[data-band="high"] { background: var(--band-bg); }
+.bin-sections { display: flex; gap: 2px; padding: 0 6px 6px; background: var(--band-bg, var(--paper)); }
+.bin-section {
+  min-width: 14px; height: 18px; padding: 0 2px; border: 1px solid var(--line); cursor: pointer;
+  font-family: var(--font-mono); font-size: 9px; font-weight: 700; overflow: hidden; white-space: nowrap;
+  background: var(--steel-2); color: var(--ink);
+}
+.bin-section.band-bass { background: var(--bass); color: var(--bass-ink); }
+.bin-section.band-mid { background: var(--mid); color: var(--mid-ink); }
+.bin-section.band-high { background: var(--high); color: var(--high-ink); }
+.bin-section.selected { outline: 2px solid var(--ink); outline-offset: 1px; }
+.bin-section.is-off { opacity: 0.4; }
+.bin-section:focus-visible { outline: 2px solid var(--high); outline-offset: 1px; }

@@ -270,7 +270,9 @@ class OfflineRenderer {
     viz.applyModeSurface = () => {};
     viz.updateSpectrumBars = () => {};
     viz.initializeParticles();
-    const scene = { M, p, host, viz, W, H, sources: new Map(), images: new Map(), edl: app.clipEngine.edl(), segIdx: 0, simIndex: -1, mode: null, clipFrame: null };
+    // The base cut list and the over stream (D-88) are read separately.
+    const all = app.clipEngine.edl();
+    const scene = { M, p, host, viz, W, H, sources: new Map(), images: new Map(), edl: all.filter(s => s.stream !== 'over'), over: all.filter(s => s.stream === 'over'), segIdx: 0, simIndex: -1, mode: null, clipFrame: null };
     viz.clipEngine = { draw: (pp) => this.drawClips(scene, pp) };
 
     // Media Layers: same slots and settings, media decoded here.
@@ -433,6 +435,9 @@ class OfflineRenderer {
       }
       return { g: await src.frameAt(this.clipTime(seg, a, t, src.duration)) };
     };
+    const ov = (scene.over || []).find(s => s.start <= t && s.end > t);
+    const oa = ov && engine.clipById(ov.clipId);
+    scene.overFrame = oa && oa.file ? { g: await this.imageGraphics(scene, oa.file, `img:${oa.id}`), clip: oa, alpha: ClipEngine.overAlpha(ov, t) } : null;
     scene.clipFrame = {
       cur: await handle(cur, 'a'),
       out: out ? await handle(out, out.clipId === (cur && cur.clipId) ? 'b' : 'a') : null,
@@ -469,6 +474,12 @@ class OfflineRenderer {
     }
     p.noTint();
     if (this.app.clipEngine.settings.overlayLayers) scene.viz.drawReactiveLayers(p);
+    // Over stream: same placement as live, at this frame's breakpoint.
+    const of = scene.overFrame;
+    if (of && of.g) {
+      const pl = Placement.at(of.clip.placement || Placement.defaults({ size: 60 }), DisplaySize.bpFor(p.width, p.height));
+      Placement.draw(p, of.g, pl, p.width, p.height, scene.viz.reactInput ? scene.viz.reactInput(p) : null, of.alpha);
+    }
   }
 
   // Decoded image as a p5 graphic (cached).

@@ -134,9 +134,10 @@ const r2 = await E(async (id) => {
   const edl = e.edl();
   const per = kids.map(k => { const b = e.sectionBounds(k); const s = edl.filter(x => x.clipId === k.id); return { name: k.name, n: s.length, inside: s.every(x => x.inPoint >= b.start - 1e-6 && x.inPoint < b.end && x.range[0] === b.start && x.range[1] === b.end), speeds: [...new Set(s.map(x => x.speed))], holds: [...new Set(s.map(x => x.holdBeats))] }; });
   const cards = [...document.querySelectorAll('.bin-card .bin-name')].map(c => c.textContent);
-  return { per, cards, parentInCut: edl.some(s => s.clipId === id), stackLen: e.stack.length, media: e.mediaAssets.length };
+  const strip = [...document.querySelectorAll('.bin-card .bin-section')].length;
+  return { per, cards, strip, parentInCut: edl.some(s => s.clipId === id), stackLen: e.stack.length, pool: e.pickList().length, media: e.mediaAssets.length };
 }, id);
-ok('4 sections = 4 cards, no copy of the video', r2.stackLen === 4 && r2.media === 1 && r2.cards.length === 4 && /· 2\/4$/.test(r2.cards[1]), r2.cards.join(' | '));
+ok('4 sections: one card with a 4-section strip, picked as 4, no copy of the video', r2.stackLen === 1 && r2.pool === 4 && r2.media === 1 && r2.cards.length === 1 && r2.strip === 4, JSON.stringify({ cards: r2.cards, strip: r2.strip, pool: r2.pool }));
 ok('each section cuts on its own (own part, own speed / pace)', r2.per.every(p => p.n > 0 && p.inside) && !r2.parentInCut && r2.per[3].speeds.join() === '2' && r2.per[1].holds.join() !== r2.per[0].holds.join(), JSON.stringify(r2.per.map(p => [p.n, p.speeds, p.holds])));
 
 // 3) Fit to bars: 0:00–0:12 into 4 bars (8 s at 120 BPM) -> 1.5×.
@@ -218,7 +219,7 @@ await page.mouse.click(geo.x5, geo.y); await sleep(200);
 const s1 = await E(() => djApp.clipEngine.mediaAssets[0].sections.slice());
 await page.mouse.move(geo.x6, geo.y); await page.mouse.down(); await page.mouse.move(geo.x9, geo.y, { steps: 6 }); await page.mouse.up(); await sleep(200);
 const s2 = await E(() => djApp.clipEngine.mediaAssets[0].sections.slice());
-const cards2 = await E(() => djApp.clipEngine.stack.map(c => c.name));
+const cards2 = await E(() => djApp.clipEngine.pickList().map(c => c.name));
 await page.mouse.click(geo.x8, geo.y, { button: 'right' }); await sleep(200);
 const s3 = await E(() => djApp.clipEngine.mediaAssets[0].sections.slice());
 await E(() => djApp.clipTools.closeSections());
@@ -244,4 +245,16 @@ const blend = await E(async () => {
   e.settings.transitionMode = 'jump';
   return seen;
 });
-ok('live: a crossfade between two sections of one video shows both (own players, same file)', blend && blend.def === 'crossfade' && blend.separate && blend.playing && Math.abs(blend.aT - blend.bT) > 5, JSON.stringify(blend));
+ok('live: a crossfade between two sections of one video shows both (decks A and B on the same file)', blend && blend.def === 'crossfade' && blend.separate && blend.playing && Math.abs(blend.aT - blend.bT) > 5, JSON.stringify(blend));
+
+// Two decks per file at most (A / B), however many sections it has.
+const decks = await E(async () => {
+  const e = djApp.clipEngine, p = e.mediaAssets[0];
+  e.setSections(p.id, [8, 16, 24, 32]);
+  e.settings.transitionMode = 'crossfade';
+  djApp.seekMaster(1); await djApp.toggleAudio(); await new Promise(r => setTimeout(r, 4000)); await djApp.toggleAudio();
+  e.settings.transitionMode = 'jump';
+  const players = [...document.querySelectorAll('video')].filter(v => v.src === p.url || v.currentSrc === p.url).length;
+  return { sections: e.sectionsOf(p).length, players };
+});
+ok('a video with 5 sections uses at most two players (decks A and B)', decks.sections === 5 && decks.players >= 1 && decks.players <= 2, JSON.stringify(decks));

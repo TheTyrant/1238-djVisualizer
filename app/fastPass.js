@@ -394,7 +394,8 @@ class FastPass {
       sim.edl().forEach(s => FastPass.subtract([s.start, s.end], played).forEach(([a, b]) => {
         if (b - a < 1 / FastPass.FPS) return;   // slivers under a frame: nothing to see
         const cut = { ...s, start: a, end: b, inPoint: s.inPoint + (a - s.start) * (s.speed || 1), pass: 'fast', fast: true };
-        if (a > s.start) { cut.transition = 'jump'; cut.blendSec = 0; }
+        if (a > s.start) { cut.transition = 'jump'; cut.blendSec = 0; cut.fadeIn = false; }   // split by a played take: no new fade
+        if (b < s.end - 1e-6) cut.fadeOut = false;
         pieces.push(cut);
       }));
       e.segments.push(...pieces);

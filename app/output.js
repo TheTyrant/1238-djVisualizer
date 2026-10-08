@@ -134,6 +134,7 @@
         const proxy = Object.create(sourceViz);
         proxy.w = w;
         proxy.h = h;
+        proxy.layerBoxes = null;   // the viewport's drag-handle boxes stay the viewport's (D-87)
         proxy.layers = {
           background: { ...sourceViz.layers.background, media: localLayers.background.media, bridge: localLayers.background.bridge || null },
           bass: { ...sourceViz.layers.bass, media: localLayers.bass.media, bridge: localLayers.bass.bridge || null },

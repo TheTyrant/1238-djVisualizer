@@ -498,11 +498,10 @@ The brief's four questions were not answered before the build. Rather than guess
   - The auto-editor only picks in-points inside it, and a regular clip loops inside it (live and in the export).
   - A locked clip (Hook / Result / CTA) plays exactly this part, at its speed, capped by D-78.
   - The card shows the used length, and "used→on screen" when the speed changes it. Status shows source → used → on screen.
-- **Sections** (brief #2): **Sections** on a card (or in the options) opens a filmstrip over a bar ruler. The ruler's bar is the fixed grid's bar (D-81) at the clip's speed, in clip seconds (120 BPM until a tempo is known).
+- **Sections** (brief #2, reworked with Omar 2026-10-08): **Sections** on a card (or in the options) opens a filmstrip over a bar ruler. The ruler's bar is the fixed grid's bar (D-81) at the clip's speed, in clip seconds (120 BPM until a tempo is known).
   - Click to add a marker on the nearest bar line, drag to move it (it snaps to bars), right-click to delete.
-  - Each section becomes a child card "Clip · 2/4" with its own Pace, Importance, band, speed, amount used and lock. Children read the parent's video, file and size; there is no copy, and the file is packed once.
-  - *Proposed — needs Omar (asked 2026-10-08):* while a clip has sections, its own card is replaced by the section cards (it stays in 03 Sound's list as the owner of the video, with the sections indented under it). "Remove all sections" brings the single card back.
-  - **Live blends between sections (Omar, 2026-10-08):** each section has its own player on the parent's file (no copy in the project), so cuts between two sections of one video follow the band transitions live as well as in the export.
+  - **One card per clip (Omar):** the sections show as a strip in the card's lower area, which is taller now at the expense of the thumbnail. Click a section to give it its own Pace, band, speed, amount used and lock (03 Sound). The automation picks sections in the clip's place in the stack (they share its Importance). Sections read the clip's video, file and size; there is no copy, and the file is packed once.
+  - **Two decks per video at most (Omar, 2026-10-08), like a DJ's A / B:** deck A is the clip's player; deck B is made only when a blend needs two parts of the same video on screen at once. Cuts between sections then follow the band transitions live as well as in the export.
 - **Speed** (brief #12): presets ¼ ½ ¾ 1 1½ 2 4× plus a number field (0.25–4). On-screen length = used ÷ speed.
   - The renderer maps `in + elapsed × speed` (frame-accurate) and wraps inside the used part. Each cut records its `speed` and `range`, so a later edit can't change what was played. Cuts recorded before v2.4 have neither and map exactly as before.
   - The clip's own sound changes pitch with the speed (plain resample): live through `playbackRate` with `preservesPitch = false`, and in the mixdown through `AudioBufferSourceNode.playbackRate`. Measured: a 440 Hz tone at 1.5× exports at 660 Hz.
@@ -517,7 +516,7 @@ The brief's four questions were not answered before the build. Rather than guess
   - light skin: white on bass (4.55) and high (5.90), near-black on mid (4.98);
   - dark skin: near-black on all three (6.29 / 9.11 / 6.08).
   - Measured on the rendered cards in `tests/workspace.js`. **Any** stays neutral.
-- Each card also shows its band member tag (B1, M2 …) top-left.
+- Each card also shows its band member tag (B1, M2 …) top-left; a clip with sections shows how many (e.g. 4§), and each section in its strip shows its own tag in its own band colour. No animation (Omar).
 - *Proposed — needs Omar:* the colour is the clip's **assigned** band (its Band setting). It is not the band that happened to trigger a given cut; that one is shown in Band members (D-86).
 
 ### D-84 · Resizable lanes, remembered *(Accepted — built)*
@@ -534,6 +533,35 @@ The brief's four questions were not answered before the build. Rather than guess
 - **Global edit** (brief #11) is a collapsible section (open state remembered) holding Switch timing / Pace, Clip order, Transition + band map, and In-point.
 - **Band members**, at the top of the panel: one row per band with its swatch, how many clips, and a chip per member. Clicking a chip selects that card. The row lights up while that band triggered the cut on air (the dominant band at that cut).
 - **Clip order = By band** groups the Action Editor by band. Dragging within a group changes the rank. Dragging into another group changes the clip's band and places it where it was dropped. Other orders show the single stack as before.
+
+
+### D-87 · Placement model, shared by Media Layers, images and titles *(Accepted — built: layers + images; titles in D-89)*
+- **Model** (`app/placement.js`):
+  - `anchor` (9-point: the item's point sits on the same point of the frame), `x` / `y` (offset, fractions of the frame);
+  - `size`, `rotation`, `opacity`, `fit` (contain / cover), `blend` (normal / screen / multiply / overlay / add), `z`;
+  - `react` (none / rattle / pulse + band), and `bp` (per-breakpoint overrides, D-63).
+  - The viewport, pop-out and offline renderer all draw through it.
+- **Existing layers draw identically:** a slot without an edited placement converts live from the alpha's settings:
+  - justify left / centre / right → anchor middle-left / centre / right;
+  - stack → z, 80 % contain, bass rattle;
+  - background → cover, full frame.
+  - Verified pixel-for-pixel: `tests/placement.js` draws the same frozen frame with the alpha's own `drawSingleLayer` (kept verbatim in `tests/fixtures/legacy-layers.js`) and with the new code, in three justify / stack set-ups. 0 pixels differ.
+- *Proposed — needs Omar:* **size = % of the frame** the item fits inside (contain) or covers (cover), not % of the short side as the brief says. With % of the short side, the alpha's 80 % contain look couldn't be reproduced exactly.
+- *Proposed — needs Omar:* p5's WebGL canvas has no Overlay blend, so **Overlay draws as Screen**.
+- **Controls** (03 Sound, for a bass / mid / high layer or an Over image): anchor grid, X / Y %, Size %, Rotate, Opacity, Fit, Blend, React. The title shows which breakpoint is being edited, with "Use Base layout" to drop an override. The old Justify / Stack selects still work and update the placement.
+- **Viewport drag handle** (`app/placeHandle.js`): while 03 Sound is open, the selected layer or Over image gets a dashed box on the viewport. Dragging it moves the item on the breakpoint on screen, so 16:9 and 9:16 keep separate layouts (tested).
+- Fix found on the way: after `noTint()`, p5's WebGL renderer in the export has no tint, and the next `image()` fails. Placement drawing sets tint inside push / pop.
+
+### D-88 · Images over video: the over stream *(Accepted — built)*
+- **Show: Over video | Full frame** on images (brief #7). New images default to **Over**; images in alpha projects open as **Full frame** (tested).
+- **At a cut**, if the pick is an Over image and the over stream is free, the image opens on the over stream for its hold, and the engine picks again from the videos for the base. Only one over item is on screen at a time.
+  - Over cuts are cut-list entries with `stream: 'over'`.
+  - The renderer reads them as a separate list and draws them through the image's placement. Live, they draw above the clip.
+  - They fade 0.15 s at their real start and end, not where a played take or seek split them; a bug found and fixed while taking screenshots.
+- **With no videos**, an Over image behaves as Full frame.
+- **A locked Over image** (Hook / Result / CTA) plays over the video for its block, with the same D-78 cap and Auto fade. The videos keep cutting underneath (tested: Hook 0–4 s over Red / Blue / Red).
+- The band strip draws over cuts in its second row; the full lane draws them as a red bar on top.
+- *Not built — known gap:* the pop-out window still doesn't mirror Clip Auto-Editor mode (pre-existing, D-50 era), so it can't show over images in Clip mode yet. The viewport, fullscreen and export do.
 
 ## I. Known carry-overs (pre-existing on `main`, not changed)
 - Placeholder text drawn with `p.text()` in WebGL mode doesn't render, because no font is loaded (affects the Media Layers "Upload images…" prompt). v2 uses a DOM overlay for its own hints.

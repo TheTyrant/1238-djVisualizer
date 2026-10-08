@@ -65,6 +65,7 @@ class ClipEngine {
     this.pending = null;    // pre-rolled next clip { clip, inPoint }
     this.transition = null; // { def, startMs, lengthMs }
     this.story = null;      // story block on screen, if any
+    this.over = null;       // over-stream cut on screen, if any (D-88)
     // Session record (D-56): segments/beats are kept across seeks. Each
     // play-through after a seek is a "pass" that overwrites only the span
     // it actually plays, like punching in on a DAW track.
@@ -85,8 +86,10 @@ class ClipEngine {
   // Media Layer, no story role.
 
   // Assets used as auto-edit clips, in stack (Importance) order.
+  // Cards in the Action Editor: whole clips (a clip with sections keeps
+  // its one card; its sections show as a strip inside it, Omar 2026-10-08).
   get clips() {
-    return this.assets.filter(a => a.asClip && !this.isSplit(a)).sort((a, b) => a.importance - b.importance);
+    return this.assets.filter(a => a.asClip && !a.parent).sort((a, b) => a.importance - b.importance);
   }
 
   // ---- clip model (v2.4 step 2, D-82) -------------------------------------
@@ -111,7 +114,7 @@ class ClipEngine {
   static BAND_LETTER = { bass: 'B', mid: 'M', high: 'H', any: 'A' };
   bandMembers() {
     const out = { bass: [], mid: [], high: [], any: [] };
-    this.stack.forEach(c => (out[c.band] || out.any).push(c));
+    this.pickList().forEach(c => (out[c.band] || out.any).push(c));   // sections count on their own
     return out;
   }
   memberTags() {
@@ -214,14 +217,21 @@ class ClipEngine {
     this.emit('clips');
   }
 
-  // The section's own <video> on its parent's file, made when first needed
-  // (and again if the parent is reconnected to another file).
+  // Two decks per video file at most, like a DJ's A / B (Omar, 2026-10-08):
+  // deck A is the clip's own player; deck B is made only when a blend needs
+  // two parts of the same video on screen at once (two sections of it).
   sectionPlayer(c) {
     const pp = this.clipById(c.parent);
+    if (!pp) return null;
+    if (c._deck === 'B') return this.deckB(pp) || pp;
+    return pp;
+  }
+
+  deckB(pp) {
     const p = this.viz.p5Instance;
-    if (!pp || !pp.url || !pp.ready || !p) return null;
-    if (c._player && c._player.url === pp.url) return c._player;
-    this.dropSectionPlayer(c);
+    if (!pp.url || !pp.ready || !p) return null;
+    if (pp._deckB && pp._deckB.url === pp.url) return pp._deckB;
+    this.dropDeckB(pp);
     const media = p.createVideo([pp.url]);
     media.hide();
     media.volume(0);
@@ -229,18 +239,29 @@ class ClipEngine {
     media.elt.loop = true;
     media.elt.playsInline = true;
     media.elt.preload = 'auto';
-    c._player = { url: pp.url, media, el: media.elt, bridge: pp.rotation ? VideoOrientation.bridge(p, media) : null };
-    return c._player;
+    pp._deckB = { url: pp.url, media, el: media.elt, bridge: pp.rotation ? VideoOrientation.bridge(p, media) : null };
+    return pp._deckB;
   }
 
-  dropSectionPlayer(c) {
-    const pl = c._player;
+  dropDeckB(pp) {
+    const pl = pp && pp._deckB;
     if (!pl) return;
     if (pl.bridge) pl.bridge.remove();
     try { pl.el.pause(); } catch (e) { /* gone */ }
     pl.media.remove();
-    c._player = null;
+    pp._deckB = null;
   }
+
+  // A section about to go on air takes the other deck when the cut on
+  // screen is another part of the same video.
+  pickDeck(clip) {
+    if (!clip || !clip.parent) return;
+    const on = this.current && this.current.clip;
+    const same = on && on !== clip && (on.parent === clip.parent || on.id === clip.parent);
+    clip._deck = same && on._deck !== 'B' ? 'B' : 'A';
+  }
+
+  dropSectionPlayer() { /* sections have no player of their own any more */ }
 
   // A section clip: its own settings; media, file and size come from the
   // parent (read through, never copied).
@@ -311,6 +332,10 @@ class ClipEngine {
       storyHold: 3,              // seconds an image story block holds (Q9)
       fade: { on: false, curve: 'smooth', bars: 1 },   // Auto Fade Music around this locked clip (D-59)
       ...ClipEngine.clipDefaults(),
+      // Images (D-88): new ones play OVER the video (own placement);
+      // 'full' = full frame, as in the alpha.
+      show: kind === 'image' ? 'over' : 'full',
+      placement: kind === 'image' ? Placement.defaults({ size: 60, z: 10 }) : null,
     };
     this.assets.push(asset);
     if (kind === 'image') this.loadImageAsset(asset);
@@ -425,6 +450,8 @@ class ClipEngine {
       ...ClipEngine.clipDefaults(),
       used: saved.used ? { ...saved.used } : { start: 0, end: null }, speed: saved.speed || 1,
       sections: Array.isArray(saved.sections) ? saved.sections.slice() : [], fitBars: saved.fitBars || null,
+      show: saved.show || 'full',   // alpha images open as Full frame (D-88)
+      placement: saved.placement ? JSON.parse(JSON.stringify(saved.placement)) : (saved.kind === 'image' ? Placement.defaults({ size: 60, z: 10 }) : null),
     };
     this.assets.push(asset);
     this.emit('clips');
@@ -454,6 +481,7 @@ class ClipEngine {
     if (this.pending && this.pending.clip === clip) this.pending = null;
     if (clip.parent) this.dropSectionPlayer(clip);
     if (!clip.parent) {
+      this.dropDeckB(clip);
       if (clip.layer && !clip.offline) this.viz.clearLayerMedia(clip.layer);
       if (clip.bridge) clip.bridge.remove();
       if (clip.kind === 'video' && clip.media) clip.media.remove();
@@ -630,7 +658,8 @@ class ClipEngine {
     // Story Mode: while the master time is inside a story block, that block
     // owns the screen (no automated picks). When it ends, cutting re-syncs
     // on the master beat grid, the same way it does after a seek (D-34).
-    const block = this.settings.storyMode ? this.storyBlockAt(this.clock()) : null;
+    let block = this.settings.storyMode ? this.storyBlockAt(this.clock()) : null;
+    if (block && this.isOver(block.clip)) { this.overStory(block); block = null; }
     if (block) { this.playStory(block); return; }
     if (this.story) {
       this.endStory();
@@ -690,7 +719,8 @@ class ClipEngine {
       if (idx >= 0) this.beats.push({ time: this.grid.timeOfBeat ? this.grid.timeOfBeat(idx) : t, index: idx, pass: this.pass });
       this.emit('beat', idx);
     }
-    const block = this.settings.storyMode ? this.storyBlockAt(t) : null;
+    let block = this.settings.storyMode ? this.storyBlockAt(t) : null;
+    if (block && this.isOver(block.clip)) { this.overStory(block); block = null; }
     if (block) { this.playStory(block); return; }
     if (this.story) { const end = this.story.end; this.endStory(); this.cut(bpm, null, end != null && end <= t ? end : t); this.alignToGrid(pos, bpm); return; }
     // First picture: from where playback started (0:00 after Stop), not
@@ -742,7 +772,14 @@ class ClipEngine {
 
   // Clips the automation may pick: decoded, in stack order.
   regularPool() {
-    return this.stack.filter(c => c.ready);
+    return this.pickList().filter(c => c.ready);
+  }
+
+  // What the automation picks from, in stack order: a clip with sections is
+  // replaced by its sections (each with its own pace / band / speed).
+  pickList() {
+    const sm = this.settings.storyMode;
+    return this.stack.flatMap(c => (this.isSplit(c) ? this.sectionsOf(c).filter(s => s.asClip && !(sm && s.story !== 'none')) : [c]));
   }
 
   // ---- Story Mode (v2.1 step 7, D-33–D-35) ------------------------------
@@ -916,8 +953,49 @@ class ClipEngine {
   //  - Sequential: the next clip down the stack, wrapping to the top.
   //  - Random / By band: weighted pick, top of the stack most often.
   //    Never the same clip twice in a row.
-  choose() {
-    const clips = this.regularPool();
+  // Over stream (D-88): an image set to "Over video" plays above the video
+  // while the base keeps cutting. Only when there are videos to play under
+  // it — with none, an Over image behaves as Full frame.
+  hasVideos() { return this.regularPool().some(c => c.kind === 'video'); }
+  isOver(c) { return !!c && c.kind === 'image' && c.show === 'over' && this.hasVideos(); }
+  overFree(t) { return !this.over || this.over.end <= t + 1e-6; }
+  overAt(t) { return this.segments.find(s => s.stream === 'over' && s.start <= t && (s.end == null ? Infinity : s.end) > t) || null; }
+
+  // Open an image on the over stream for its hold (beats → seconds on the
+  // grid when it drives the edit).
+  startOver(clip, atPos, bpm, now) {
+    const hold = this.intervalFor(clip, bpm);
+    let end = now + MusicalTime.beatsToMs(hold, bpm || 120) / 1000;
+    if (atPos != null && this.gridOn()) end = Math.max(now + 0.05, this.grid.timeOfBeat(atPos + hold));
+    const seg = { clipId: clip.id, start: now, end, inPoint: 0, transition: 'jump', band: this.dominant, beat: this.beatIndex, stream: 'over', holdBeats: hold, pass: this.pass, blendSec: 0 };
+    this.segments.push(seg);
+    this.over = seg;
+    this.emit('cut', seg);
+    return seg;
+  }
+
+  // Over-stream fade: 0.15 s at a cut's real start and end (not where a
+  // played take split it, D-88).
+  static overAlpha(seg, t, f = 0.15) {
+    const a = seg.fadeIn === false ? 1 : (t - seg.start) / f;
+    const b = seg.fadeOut === false ? 1 : (seg.end - t) / f;
+    return Math.max(0, Math.min(1, a, b));
+  }
+
+  // A locked Over image: over the video for its block, the base cutting on.
+  overStory(block) {
+    if (this.over && this.over.story === block.role && this.over.end > this.clock()) return;
+    const t = this.clock();
+    const start = t >= block.start && t - block.start < 0.1 ? block.start : t;
+    const seg = { clipId: block.clip.id, start, end: block.end, inPoint: 0, transition: 'jump', band: this.dominant, beat: this.beatIndex, stream: 'over', story: block.role, pass: this.pass, blendSec: 0 };
+    this.segments.push(seg);
+    this.over = seg;
+    this.emit('cut', seg);
+  }
+
+  choose({ videosOnly = false } = {}) {
+    let clips = this.regularPool();
+    if (videosOnly) clips = clips.filter(c => c.kind === 'video' || (c.kind === 'image' && c.show !== 'over'));
     if (clips.length === 0) return null;
     const currentClip = this.current && this.current.clip;
     const s = this.settings;
@@ -952,6 +1030,7 @@ class ClipEngine {
 
   prepare(clip, bpm) {
     if (!clip) return null;
+    if (!this.dry) this.pickDeck(clip);
     // Images hold for their Pace; in-points don't apply (D-46).
     if (clip.kind === 'image') return { clip, inPoint: 0 };
     // In-points only inside the clip's used part (D-82); a clip that
@@ -976,8 +1055,13 @@ class ClipEngine {
   // atPos: musical position (beats) this cut lands on, or null before the
   // tempo has locked (the clip just goes on screen; no schedule yet).
   cut(bpm, atPos, atTime = null) {
-    const next = this.pending || this.prepare(this.choose(), bpm);
+    let next = this.pending || this.prepare(this.choose(), bpm);
     this.pending = null;
+    if (next && this.isOver(next.clip)) {
+      const at = atTime != null ? atTime : this.clock();
+      if (this.overFree(at)) this.startOver(next.clip, atPos, bpm, at);
+      next = this.prepare(this.choose({ videosOnly: true }), bpm);
+    }
     if (!next) return;
     if (!this.dry && next.clip.el && next.clip.el.paused) next.clip.el.play().catch(() => {});
 
@@ -1047,7 +1131,7 @@ class ClipEngine {
     // The cut on air ends where playback actually was, not at the seek target.
     this.closeOpenSegment(this.lastAdvanceTime);
     this.segments.forEach(s => {
-      if (s.start < seconds && (s.end == null || s.end > seconds)) s.end = seconds;
+      if (s.start < seconds && (s.end == null || s.end > seconds)) { s.end = seconds; s.fadeOut = false; }
     });
     // Drop cuts trimmed down to nothing.
     this.segments = this.segments.filter(s => s.end == null || s.end > s.start + 0.001 || (this.current && s === this.current.segment));
@@ -1076,6 +1160,7 @@ class ClipEngine {
     const before = this.beats.filter(b => b.time < seconds);
     this.beatIndex = before.length ? before[before.length - 1].index : -1;
     this.lastSeenBeatTime = this.viz.lastBeatTime;
+    this.over = null;
     this.nextCutPos = null;   // forces a cut on the next frame
     this.segStartPos = null;
     this.holdBeats = null;
@@ -1095,7 +1180,7 @@ class ClipEngine {
       const s = this.segments[i];
       if (s.pass === this.pass || s.start < from || s.start >= now) continue;
       if (s.end != null && s.end <= now + 0.001) this.segments.splice(i, 1);
-      else { s.inPoint += (now - s.start) * (s.speed || 1); s.start = now; }
+      else { s.inPoint += (now - s.start) * (s.speed || 1); s.start = now; s.fadeIn = false; }
     }
     for (let i = this.beats.length - 1; i >= 0; i--) {
       const b = this.beats[i];
@@ -1162,6 +1247,29 @@ class ClipEngine {
     p.noTint();
 
     if (this.settings.overlayLayers && this.viz.drawReactiveLayers) this.viz.drawReactiveLayers(p);
+    this.drawOver(p);
+  }
+
+  // The over stream (D-88): the image on air above the video, through its
+  // placement, fading in and out over 0.15 s. While editing (paused), the
+  // selected Over image shows faintly where it sits, for the drag handle.
+  drawOver(p) {
+    const t = this.clock();
+    const seg = this.overAt(t);
+    let clip = seg ? this.clipById(seg.clipId) : null, alpha = 1;
+    if (seg && clip) {
+      alpha = ClipEngine.overAlpha(seg, t);
+    } else {
+      const sel = this.clipById(this.selectedId);
+      clip = !this.isAdvancing() && this.previewOver && sel && sel.kind === 'image' && sel.show === 'over' ? sel : null;
+      alpha = 0.6;
+    }
+    this.overBox = null;
+    if (!clip || !clip.media) return;
+    const bp = DisplaySize.bpFor(p.width, p.height);
+    const pl = Placement.at(clip.placement || Placement.defaults({ size: 60 }), bp);
+    this.overBox = Placement.draw(p, clip.media, pl, p.width, p.height, this.viz.reactInput ? this.viz.reactInput(p) : null, alpha);
+    this.overBox && (this.overBox.id = clip.id);
   }
 
   // Name of whatever is on screen right now (for the viewport HUD).

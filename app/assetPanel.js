@@ -151,8 +151,44 @@ class AssetPanel {
       layerSel.setAttribute('aria-label', 'Media Layer slot');
       useAs.appendChild(layerSel);
     }
-    if (a.layer && a.layer !== 'background') useAs.appendChild(this.layerControls(a.layer));
+    if (a.layer && a.layer !== 'background') {
+      useAs.appendChild(this.layerControls(a.layer));
+      const L = this.viz.layers[a.layer];
+      useAs.appendChild(this.placementControls(
+        () => L.placement || Placement.fromLayer(a.layer, L),
+        () => { if (!L.placement) L.placement = JSON.parse(JSON.stringify(Placement.fromLayer(a.layer, L))); return L.placement; },
+        `Placement · ${a.layer} layer`));
+    }
     P.appendChild(useAs);
+    // Images (D-88): over the video, or full frame like a video clip.
+    if (a.kind === 'image' && !a.parent) {
+      const sg = this.group('Show');
+      const seg = document.createElement('div');
+      seg.className = 'seg seg-btns';
+      seg.id = 'propShow';
+      seg.setAttribute('role', 'radiogroup');
+      [['over', 'Over video'], ['full', 'Full frame']].forEach(([v, label]) => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.textContent = label; b.dataset.v = v;
+        b.setAttribute('role', 'radio');
+        b.setAttribute('aria-checked', String((a.show || 'full') === v));
+        if ((a.show || 'full') === v) b.classList.add('on');
+        b.addEventListener('click', () => { a.show = v; if (v === 'over' && !a.placement) a.placement = Placement.defaults({ size: 60, z: 10 }); this.engine.emit('clips'); });
+        seg.appendChild(b);
+      });
+      sg.appendChild(seg);
+      const note = document.createElement('p');
+      note.className = 'hint';
+      note.textContent = (a.show || 'full') === 'over'
+        ? (this.engine.hasVideos() ? 'Plays above the video for its hold while the video keeps cutting underneath. Drag it on the viewport to place it.' : 'No videos to play over yet: shows full frame until there are.')
+        : 'Fills the frame like a video clip.';
+      sg.appendChild(note);
+      if ((a.show || 'full') === 'over') {
+        if (!a.placement) a.placement = Placement.defaults({ size: 60, z: 10 });
+        sg.appendChild(this.placementControls(() => a.placement, () => a.placement, 'Placement'));
+      }
+      P.appendChild(sg);
+    }
 
     // Story Position (Story Mode only, D-33). A story asset has a fixed
     // place and plays once, so Pace and Importance don't apply to it.
@@ -221,7 +257,7 @@ class AssetPanel {
       imp.value = a.importance;
       imp.title = 'Place in the Action Editor stack (1 = top, picked most)';
       imp.addEventListener('change', () => this.engine.setClipImportance(a.id, parseInt(imp.value, 10) || 1));
-      clipG.appendChild(this.row('Importance', imp));
+      if (!a.parent) clipG.appendChild(this.row('Importance', imp));
       P.appendChild(clipG);
     }
     if (a.kind === 'video' && !this.engine.isSplit(a)) P.appendChild(this.timingControls(a));
@@ -258,7 +294,7 @@ class AssetPanel {
       const p = e.parentOf(a);
       const note = document.createElement('p');
       note.className = 'hint';
-      note.textContent = `Section ${a.section + 1} of ${a.of} of ${p ? p.name : 'its clip'} — same video, its own settings.`;
+      note.textContent = `Section ${a.section + 1} of ${a.of} of ${p ? p.name : 'its clip'} — on that clip's card; same video, its own settings.`;
       g.appendChild(note);
     }
     // Amount used
@@ -329,13 +365,82 @@ class AssetPanel {
     const g = this.group('Sections');
     const note = document.createElement('p');
     note.className = 'hint';
-    note.textContent = `Split into ${a.sections.length + 1} sections; each is its own card in the Action Editor.`;
+    note.textContent = `Split into ${a.sections.length + 1} sections, shown as a strip on its card. Click a section there to give it its own pace, band and speed.`;
     g.appendChild(note);
     const b = document.createElement('button');
     b.type = 'button'; b.className = 'btn btn-block'; b.id = 'propSections'; b.textContent = 'Edit sections…';
     b.addEventListener('click', () => this.app.clipTools.openSections(a));
     g.appendChild(b);
     return g;
+  }
+
+  // Placement (D-87): anchor, offset, size, rotation, opacity, fit, blend,
+  // react. Layout keys land on the breakpoint on screen (D-63).
+  placementControls(get, ensure, title) {
+    const wrap = document.createElement('details');
+    wrap.className = 'placement-controls';
+    wrap.open = true;
+    wrap.id = 'propPlacement';
+    const sum = document.createElement('summary');
+    const bp = this.app.display ? this.app.display.breakpoint : 'base';
+    sum.textContent = `${title} — ${DisplaySize.BREAKPOINTS[bp].short}`;
+    wrap.appendChild(sum);
+    const eff = Placement.at(get(), bp);
+    const set = (k, v) => {
+      const pl = ensure();
+      (Placement.LAYOUT_KEYS.includes(k) ? Placement.target(pl, bp) : pl)[k] = v;
+      this.app.project.markDirty();
+      this.engine.emit('clips');
+    };
+    // 9-point anchor
+    const grid = document.createElement('div');
+    grid.className = 'anchor-grid';
+    grid.id = 'propAnchor';
+    grid.setAttribute('role', 'radiogroup');
+    grid.setAttribute('aria-label', 'Anchor');
+    Object.keys(Placement.ANCHORS).forEach(k => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.dataset.v = k;
+      b.title = { tl: 'Top left', tc: 'Top centre', tr: 'Top right', ml: 'Middle left', mc: 'Centre', mr: 'Middle right', bl: 'Bottom left', bc: 'Bottom centre', br: 'Bottom right' }[k];
+      b.setAttribute('aria-label', b.title);
+      b.setAttribute('aria-checked', String(eff.anchor === k));
+      if (eff.anchor === k) b.classList.add('on');
+      b.addEventListener('click', () => { set('anchor', k); set('x', 0); set('y', 0); });
+      grid.appendChild(b);
+    });
+    wrap.appendChild(this.row('Anchor', grid, 'div'));
+    const num = (id, label, v, min, max, step, onSet) => {
+      const i = document.createElement('input');
+      i.type = 'number'; i.id = id; i.min = min; i.max = max; i.step = step; i.value = v;
+      i.addEventListener('change', () => onSet(parseFloat(i.value)));
+      wrap.appendChild(this.row(label, i));
+      return i;
+    };
+    num('propPx', 'X %', Math.round((eff.x || 0) * 1000) / 10, -100, 100, 0.5, (v) => set('x', (v || 0) / 100));
+    num('propPy', 'Y %', Math.round((eff.y || 0) * 1000) / 10, -100, 100, 0.5, (v) => set('y', (v || 0) / 100));
+    num('propSize', 'Size %', eff.size, 5, 200, 1, (v) => set('size', Math.max(5, Math.min(200, v || 80))));
+    num('propRot', 'Rotate °', eff.rotation || 0, -180, 180, 1, (v) => set('rotation', v || 0));
+    num('propOpacity', 'Opacity %', Math.round((eff.opacity == null ? 1 : eff.opacity) * 100), 0, 100, 5, (v) => set('opacity', Math.max(0, Math.min(100, v)) / 100));
+    wrap.appendChild(this.row('Fit', this.select([['contain', 'Contain'], ['cover', 'Cover']], eff.fit || 'contain', (v) => set('fit', v), 'propFit')));
+    wrap.appendChild(this.row('Blend', this.select([['normal', 'Normal'], ['screen', 'Screen'], ['multiply', 'Multiply'], ['overlay', 'Overlay'], ['add', 'Add']], eff.blend || 'normal', (v) => set('blend', v), 'propBlend')));
+    const r = eff.react || { mode: 'none', band: 'bass' };
+    const react = document.createElement('div');
+    react.className = 'react-row';
+    react.append(
+      this.select([['none', 'None'], ['rattle', 'Rattle'], ['pulse', 'Pulse']], r.mode, (v) => set('react', { ...(ensure().react || r), mode: v }), 'propReact', 'React to the music'),
+      this.select([['bass', 'Bass'], ['mid', 'Mid'], ['high', 'High']], r.band, (v) => set('react', { ...(ensure().react || r), band: v }), 'propReactBand', 'Band it reacts to'));
+    wrap.appendChild(this.row('React', react, 'div'));
+    if (bp !== 'base') {
+      const pl = get();
+      const has = pl.bp && pl.bp[bp] && Object.keys(pl.bp[bp]).length;
+      const reset = document.createElement('button');
+      reset.type = 'button'; reset.className = 'btn btn-block'; reset.id = 'propPlacementReset';
+      reset.textContent = has ? `Use Base layout on ${DisplaySize.BREAKPOINTS[bp].short}` : `${DisplaySize.BREAKPOINTS[bp].short} follows Base`;
+      reset.disabled = !has;
+      reset.addEventListener('click', () => { const p2 = ensure(); if (p2.bp) delete p2.bp[bp]; this.engine.emit('clips'); });
+      wrap.appendChild(reset);
+    }
+    return wrap;
   }
 
   // Auto Fade Music around a locked clip (D-59). Ticking it reveals the
@@ -395,9 +500,9 @@ class AssetPanel {
     const row = document.createElement('div');
     row.className = 'layer-controls';
     const j = this.select([['left', 'Left'], ['center', 'Center'], ['right', 'Right']], L.justify,
-      (v) => { L.justify = v; }, `layerJustify-${slot}`, 'Justify');
+      (v) => { L.justify = v; if (L.placement) { Placement.target(L.placement, this.app.display ? this.app.display.breakpoint : 'base').anchor = { left: 'ml', center: 'mc', right: 'mr' }[v]; this.engine.emit('clips'); } }, `layerJustify-${slot}`, 'Justify');
     const s = this.select([['top', 'Top'], ['middle', 'Middle'], ['bottom', 'Bottom']], L.stack,
-      (v) => this.viz.assignStackPosition(slot, v), `layerStack-${slot}`, 'Stack');
+      (v) => { this.viz.assignStackPosition(slot, v); ['bass', 'mid', 'high'].forEach(k => { const X = this.viz.layers[k]; if (X.placement) X.placement.z = { bottom: 0, middle: 1, top: 2 }[X.stack]; }); }, `layerStack-${slot}`, 'Stack');
     j.setAttribute('aria-label', 'Layer justify');
     s.setAttribute('aria-label', 'Layer stack');
     row.append(j, s);

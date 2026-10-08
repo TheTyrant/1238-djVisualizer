@@ -31,6 +31,8 @@ const res = await E(async ({ fix, base }) => {
     eq: project.eq.mode === djApp.eqMode && project.eq.sensitivity.bass === djApp.bassGain,
     mode: project.visualMode === djApp.visualizer.currentMode,
     assets: JSON.stringify(project.assets.map(a => [a.id, a.kind, a.band, a.pace, a.story])) === JSON.stringify(e.assets.map(a => [a.id, a.kind, a.band, a.pace, a.story])),
+    imagesFull: e.assets.filter(a => a.kind === 'image').every(a => a.show === 'full'),
+    layersNoPlacement: ['bass', 'mid', 'high'].every(k => !djApp.visualizer.layers[k].placement),
     fullAt1x: e.assets.every(a => e.speedOf(a) === 1 && e.usedRange(a).start === 0 && (a.kind !== 'video' || Math.abs(e.usedRange(a).end - e.sourceLength(a)) < 1e-6) && !(a.sections && a.sections.length)),
     savedCuts: project.record.edl.map(pick),
     playedCuts: e.edl().filter(s => !s.fast).map(pick),
@@ -46,6 +48,7 @@ ok('settings come back (Auto-Editor settings, band transitions)', res.settings &
 ok('EQ mode and sensitivity come back', res.eq);
 ok('visual mode and every clip’s kind / band / pace / position come back', res.mode && res.assets);
 ok('alpha clips show their full length at 1×, no sections (v2.4 step 2)', res.fullAt1x);
+ok('alpha images open as Full frame; Media Layers keep drawing from justify / stack (v2.4 step 4)', res.imagesFull && res.layersNoPlacement);
 ok('played cuts are exactly the saved cut list', JSON.stringify(res.savedCuts) === JSON.stringify(res.playedCuts), `${res.savedCuts.length} saved, ${res.playedCuts.length} played`);
 ok('played frames are byte-for-byte the saved recording', res.framesSame, `${res.savedFrames} frames`);
 ok('alpha projects keep the live clock (tempo source "live")', res.tempo.source === 'live', JSON.stringify(res.tempo));

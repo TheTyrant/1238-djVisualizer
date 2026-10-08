@@ -301,7 +301,7 @@ class TimelinePanel {
         chip.title = `${c.name} — click to select its card`;
         chip.addEventListener('click', () => {
           e.select(c.id);
-          const card = this.el.binCards.querySelector(`.bin-card[data-id="${c.id}"]`);
+          const card = this.el.binCards.querySelector(`.bin-card[data-id="${c.parent || c.id}"]`);
           if (card) { card.scrollIntoView({ block: 'nearest', inline: 'nearest' }); card.focus({ preventScroll: true }); }
         });
         chips.appendChild(chip);
@@ -552,7 +552,7 @@ class TimelinePanel {
         const sb = document.createElement('button');
         sb.type = 'button';
         sb.className = 'bin-sect';
-        sb.textContent = clip.parent ? `§${clip.section + 1}/${clip.of}` : 'Sections';
+        sb.textContent = this.engine.isSplit(clip) ? 'Edit §' : 'Sections';
         sb.title = 'Split this clip on bar markers (each section becomes its own card)';
         sb.addEventListener('click', (ev) => { ev.stopPropagation(); this.app.clipTools.openSections(clip); });
         sb.addEventListener('keydown', (ev) => ev.stopPropagation());
@@ -562,11 +562,34 @@ class TimelinePanel {
       const bar = document.createElement('div');
       bar.className = 'bin-band-bar';
 
+      // A clip with sections (D-82): one card, its sections as a strip in
+      // the card's lower area. Click a section to edit it in 03 Sound.
+      let strip = null;
+      if (this.engine.isSplit(clip)) {
+        strip = document.createElement('div');
+        strip.className = 'bin-sections';
+        strip.setAttribute('role', 'group');
+        strip.setAttribute('aria-label', 'Sections');
+        this.engine.sectionsOf(clip).forEach(s => {
+          const b = this.engine.sectionBounds(s);
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = `bin-section band-${s.band || 'any'}` + (s.id === this.engine.selectedId ? ' selected' : '') + (s.asClip ? '' : ' is-off');
+          btn.style.flexGrow = String(Math.max(0.05, b.end - b.start));
+          btn.textContent = tagOf.get(s.id) || String(s.section + 1);
+          btn.title = `${s.name} · ${fmtTime(b.start, true)}–${fmtTime(b.end, true)} · ${s.band === 'any' ? 'any band' : s.band}${s.pace !== 'global' ? ' · ' + s.pace : ''}${s.speed !== 1 ? ' · ' + ClipTools.speedLabel(s.speed) : ''} — click to edit this section`;
+          btn.addEventListener('click', (ev) => { ev.stopPropagation(); this.engine.select(s.id); if (this.app.sidebar) this.app.sidebar.open('assets'); });
+          btn.addEventListener('keydown', (ev) => ev.stopPropagation());
+          strip.appendChild(btn);
+        });
+      }
       const member = document.createElement('span');
       member.className = 'bin-member';
-      member.textContent = tagOf.get(clip.id) || '';
+      member.textContent = tagOf.get(clip.id) || (strip ? `${clip.sections.length + 1}§` : '');
       member.title = 'Band member: band letter + rank within the band';
       card.append(rank, member, thumb, bar, meta, tags);
+      if (strip) card.appendChild(strip);
+      if (this.engine.clipById(this.engine.selectedId) && this.engine.clipById(this.engine.selectedId).parent === clip.id) card.classList.add('selected');
       const select = () => {
         this.engine.select(clip.id);
         if (this.app.sidebar) this.app.sidebar.open('assets');
@@ -1136,6 +1159,7 @@ class TimelinePanel {
       const isCur = seg === current;
       const clip = this.engine.clipById(seg.clipId);
 
+      if (seg.stream === 'over') { ctx.fillStyle = C.live; ctx.fillRect(x0, y + 1, w, 4); continue; }   // over stream (D-88)
       if (seg.story) { this.drawStoryBlock(ctx, C, seg.story, x0, x1, top, bh, isCur); continue; }
 
       ctx.fillStyle = isCur ? C.ink : C.paper;

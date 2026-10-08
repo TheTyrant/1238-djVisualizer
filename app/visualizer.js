@@ -48,6 +48,7 @@ class DJVisualizer {
     // used to auto-suggest left/right justify instead of letting small layers pile
     // up on top of each other in the center (e.g. two side-by-side character layers).
     this.smallLayerThreshold = 0.35;
+    this.layerBoxes = {};   // drawn boxes per slot, for the viewport drag handle (D-87)
 
     // Polygon visualization state
     this.polygonPoints = [];
@@ -944,11 +945,24 @@ class DJVisualizer {
   // frontmost. Only enabled layers with media loaded are drawn. Also used by
   // the clip auto-editor to overlay layers on top of clips.
   drawReactiveLayers(p) {
-    const stackOrder = { bottom: 0, middle: 1, top: 2 };
     ['bass', 'mid', 'high']
       .filter(name => this.layers[name].enabled && this.layers[name].media)
-      .sort((a, b) => stackOrder[this.layers[a].stack] - stackOrder[this.layers[b].stack])
+      .sort((a, b) => this.placementOf(a).z - this.placementOf(b).z)
       .forEach(name => this.drawSingleLayer(p, name, { reactive: true }));
+  }
+
+  // A layer's placement (D-87): its own once edited; until then the alpha's
+  // justify / stack converted, so it draws exactly as before (and the auto
+  // left / right justify of small layers still applies).
+  placementOf(name, bp = DisplaySize.bpFor(this.w || 16, this.h || 9)) {
+    const L = this.layers[name];
+    return Placement.at(L.placement || Placement.fromLayer(name, L), bp);
+  }
+
+  // What reactive placement reads: band levels, beat pulse, noise for the rattle.
+  reactInput(p) {
+    const d = this.audioData || {};
+    return { levels: { bass: d.bass || 0, mid: d.mid || 0, high: d.high || 0 }, beatPulse: this.beatPulse || 0, noise: (v) => p.noise(v), time: this.time };
   }
 
   drawMediaLayers(p) {
@@ -981,50 +995,26 @@ class DJVisualizer {
     }
   }
 
+  // One Media Layer, drawn through its placement (D-87). The alpha's look
+  // is the converted placement: background = cover full frame; reactive
+  // slots = 80 % contain at their justify, bass rattles.
   drawSingleLayer(p, layerName, { reactive }) {
     const layer = this.layers[layerName];
     if (!layer.media) return;
-
-    const mediaW = layer.media.width || 1;
-    const mediaH = layer.media.height || 1;
-
-    let baseW, baseH;
-    if (reactive) {
-      // Contain-fit with margin: shrink to fit fully within the canvas,
-      // leaving room to be positioned via justify.
-      const fitScale = Math.min(this.w / mediaW, this.h / mediaH) * 0.8;
-      baseW = mediaW * fitScale;
-      baseH = mediaH * fitScale;
-    } else {
-      // Background: cover-fit, fills the full frame (may crop the image),
-      // since it's meant to be a full backdrop, not a positioned element.
-      const coverScale = Math.max(this.w / mediaW, this.h / mediaH);
-      baseW = mediaW * coverScale;
-      baseH = mediaH * coverScale;
-    }
-
-    // Justify sets horizontal anchor; vertical stays centered for now.
-    let x = 0;
-    if (reactive) {
-      if (layer.justify === 'left') x = -this.w / 2 + baseW / 2;
-      else if (layer.justify === 'right') x = this.w / 2 - baseW / 2;
-    }
-
-    let offsetX = 0, offsetY = 0;
-
-    // Bass rattle: small, fast x/y jitter scaled to bass energy. On by
-    // default per spec. No scale or rotation involved -- just shakes in place.
-    if (reactive && layerName === 'bass') {
-      const bass = this.audioData.bass || 0;
-      const rattleAmplitude = 18; // px, tune to taste
-      offsetX = (p.noise(this.time * 40) - 0.5) * 2 * rattleAmplitude * bass;
-      offsetY = (p.noise(this.time * 40 + 500) - 0.5) * 2 * rattleAmplitude * bass;
-    }
-
+    const img = layer.bridge ? layer.bridge.frame() : layer.media;
+    const pl = this.placementOf(layerName);
+    // Media size as the alpha measured it (the element, not a rotated bridge frame).
+    const sized = { width: layer.media.width || 1, height: layer.media.height || 1 };
+    const b = Placement.box(pl, this.w, this.h, sized.width, sized.height, reactive ? this.reactInput(p) : null);
     p.push();
-    p.translate(x + offsetX, offsetY);
-    p.image(layer.bridge ? layer.bridge.frame() : layer.media, -baseW / 2, -baseH / 2, baseW, baseH);
+    if (pl.blend && pl.blend !== 'normal') p.blendMode(pl.blend === 'multiply' ? p.MULTIPLY : pl.blend === 'add' ? p.ADD : p.SCREEN);
+    p.translate(b.cx, b.cy);
+    if (b.rot) p.rotate(b.rot);
+    if (b.alpha < 1) p.tint(255, b.alpha * 255);   // scoped by push / pop
+    p.image(img, -b.w / 2, -b.h / 2, b.w, b.h);
+    if (pl.blend && pl.blend !== 'normal') p.blendMode(p.BLEND);
     p.pop();
+    if (this.layerBoxes) this.layerBoxes[layerName] = b;
   }
 
   drawSnakeGame(p) {
