@@ -296,6 +296,9 @@ class DJVisualizerApp {
 
     // Text (04 Text tab + overlay on the viewport)
     this.text.attach(document.getElementById('stage') || document.querySelector('.visualizer-container'));
+    // Drag handle for layer / Over image placements (D-87)
+    this.placeHandle = new PlaceHandle(this);
+    this.placeHandle.init(document.getElementById('stage') || document.querySelector('.visualizer-container'));
     this.textPanel = new TextPanel(this);
     this.textPanel.init();
     this.exportPanel = new ExportPanel(this);
