@@ -52,7 +52,11 @@ class DJVisualizerApp {
     this.visualizer.clipEngine = this.clipEngine;
     this.clipEngine.clock = () => this.masterTime();
     this.clipEngine.isAdvancing = () => this.visualizer.currentMode === 'clips' && this.timelineRolling();
-    this.clipEngine.songDuration = () => (this.isTrackMode() ? this.trackSource.duration : 0);
+    this.clipEngine.songDuration = () => (this.isTrackMode() ? this.songLength() : 0);
+    // Master track length (Omar, 2026-10-08; D-97): null = the whole file;
+    // else the song ends here (30 s at least). Cuts, positions, fades,
+    // end-locked text, playback and the export all follow it.
+    this.trackLength = null;
     // Fixed tempo grid + fast pass (v2.4, D-80, D-81): in track mode the
     // whole song is analysed on load and the edit follows one grid.
     this.tempo = new TempoGrid(this);
@@ -653,11 +657,25 @@ class DJVisualizerApp {
     return Math.max(0.05, (+f.len || 1) * bar);
   }
 
+  songLength() {
+    const d = this.trackSource.duration || 0;
+    return this.trackLength && d ? Math.min(d, Math.max(30, this.trackLength)) : d;
+  }
+
+  setTrackLength(sec) {
+    const d = this.trackSource.duration || 0;
+    this.trackLength = !sec || sec >= d - 0.05 ? null : Math.max(30, Math.min(d, Math.round(sec * 10) / 10));
+    if (this.isTrackMode() && this.masterTime() > this.songLength()) this.seekMaster(this.songLength());
+    this.applyMusicLevel();
+    this.fastPass.soon(30);
+    this.project.markDirty();
+  }
+
   masterFadeOn() { return this.isTrackMode() && (this.masterFade.in.on || this.masterFade.out.on); }
 
   masterFadeLevel(t) {
     if (!this.isTrackMode()) return 1;
-    const F = this.masterFade, dur = this.trackSource.duration || 0;
+    const F = this.masterFade, dur = this.songLength();
     let lvl = 1;
     if (F.in.on) { const L = this.fadeSeconds(F.in); if (t < L) lvl = Math.min(lvl, (DJVisualizerApp.FADE_SHAPES[F.in.shape] || DJVisualizerApp.FADE_SHAPES.smooth)(Math.max(0, t / L))); }
     if (F.out.on && dur > 0) { const L = this.fadeSeconds(F.out); if (t > dur - L) lvl = Math.min(lvl, (DJVisualizerApp.FADE_SHAPES[F.out.shape] || DJVisualizerApp.FADE_SHAPES.smooth)(Math.max(0, (dur - t) / L))); }
@@ -967,7 +985,7 @@ class DJVisualizerApp {
       if (!this.unparking) this.parkedTrack = null;   // a new track replaces the parked one
       this.attachEq();
       this.audioFileStatus.textContent = `Loaded: ${file.name}`;
-      if (!keepSession) { this.resetSession(); this.tempo.reset(); }
+      if (!keepSession) { this.resetSession(); this.tempo.reset(); this.trackLength = null; }
       this.timeline.loadTrackWaveform(file);
       // Fast pass (D-80): analyse the whole song now, in slices; the grid,
       // motion and cuts for the unplayed parts follow when it's done.

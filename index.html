@@ -536,7 +536,7 @@
               <div class="tl-area" id="tlArea">
               <div class="channels">
                 <div class="ch ch-ruler"></div>
-                <div class="ch ch-master"><div class="ch-row"><span class="ch-name">Master</span><span class="ch-btns"><button class="ch-mute" id="masterFadesBtn" type="button" aria-pressed="false" aria-haspopup="dialog" title="Fade in / fade out (track)">F</button><button class="ch-mute" id="muteMaster" type="button" aria-pressed="false" title="Mute the music (left out of exports)">M</button></span></div><span class="ch-sub" id="chMasterSub">Live input</span></div>
+                <div class="ch ch-master"><div class="ch-row"><span class="ch-name">Master</span><span class="ch-btns"><button class="ch-mute" id="masterFadesBtn" type="button" aria-pressed="false" aria-haspopup="dialog" title="Fade in / fade out (track)">F</button><button class="ch-mute" id="muteMaster" type="button" aria-pressed="false" title="Mute the music (left out of exports)">M</button></span></div><span class="ch-sub" id="chMasterSub">Live input</span><button type="button" class="ch-time" id="masterLength" title="The song's length — click to shorten it (30 s at least)" hidden>00:00</button></div>
                 <div class="ch ch-clips"><div class="ch-row"><span class="ch-name">Clips</span><button class="ch-mute ch-expand" id="clipsExpand" type="button" aria-pressed="false" title="Show the clip lane full size (thumbnails, names) or as a compact band strip">&#x25B8;</button></div><span class="ch-sub" id="chClipsSub">Strip + over</span></div>
                 <div class="ch ch-voice" id="chVoice" hidden><div class="ch-row"><span class="ch-name">Voice</span><button class="ch-mute" id="muteVoice" type="button" aria-pressed="false" title="Mute the voice (left out of exports)">M</button></div><span class="ch-sub" id="chVoiceSub">—</span></div>
                 <div class="ch ch-text" id="chText" hidden><span class="ch-name">Text</span><span class="ch-sub">Titles</span></div>
@@ -546,7 +546,7 @@
               </div>
               <div class="lane-grips" id="laneGrips" aria-hidden="true"></div>
               </div>
-              <div class="ch ch-bin"><span class="ch-name">Action</span><span class="ch-sub" id="binCount">0 clips</span><span class="ch-sub ch-hint">Drag to reorder.<br>Top = most important</span></div>
+              <div class="ch ch-bin"><span class="ch-name">Action clips</span><span class="ch-sub" id="binCount">0 clips</span><span class="ch-sub ch-hint">Drag to reorder.<br>Top = most important</span></div>
               <div class="clip-bin dropzone" id="clipBin">
                 <label class="bin-add" title="Add images or video (also in 03 Sound › Assets)">
                   <input type="file" id="clipUpload" accept="image/*,video/*,.asf,.wmv" multiple>
@@ -555,7 +555,6 @@
                 </label>
                 <div class="bin-cards" id="binCards" role="listbox" aria-label="Action Editor stack"></div>
               </div>
-              <div class="lane-grip bin-grip" id="binGrip" role="separator" aria-orientation="horizontal" title="Drag to resize the Action Editor · double-click to reset"></div>
             </div>
           </div>
         </section>

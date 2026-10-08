@@ -631,6 +631,21 @@ The brief's four questions were not answered before the build. Rather than guess
 - The option groups inside (Use as, Clip, Timing, Visual, Status, Look …) fold the same way.
 - Fold-outs start open; folding one is remembered (layout record, D-84). Every control keeps its id.
 
+
+### D-96 · The bottom shelf as drawers *(Accepted — built; Omar, 2026-10-08; replaces D-84's grips)*
+- **Drawers:** Master, Clips, Voice, Text and Action clips are a stack of drawers under the ruler, all on the Master lane's dark background (`--scope-bg-1`) in both skins. Lanes are drawn with the dark skin's ink; the playhead is white over them.
+- **Dividers:** on each line between two drawers there is a 1 px white line with a pill in the middle. Dragging it moves height from one drawer to the other; double-click resets both. The Action clips drawer has one too.
+- **One main drag** (viewport ↕ shelf): every drawer grows or shrinks with it evenly, each keeping its share. Nothing scrolls, and the Action clips end exactly at the shelf's bottom, so no control sits under the main drag. That was the bug Omar found.
+- The compact clip strip keeps its fixed height. Shares are saved in the layout record.
+- **Lane labels** (Master, Clips, Voice, Text, Action clips) use the shelves' text and icon style (D-95) at the same font sizes.
+- Tested (`tests/workspace.js`).
+
+### D-97 · Master track length *(Accepted — built; Omar, 2026-10-08)*
+- **Decision:** the track's time shows under the Master label. Clicking it opens Track length: a slider plus minutes / seconds, **30 s at least**, and "Full length" to go back.
+- `app.songLength()` is the song's end everywhere: cuts and the fast pass, positions (the CTA sits at the new end), end-locked text, master fades, the timeline (shaded past the end), the TRACK badge, playback (stops there) and the export.
+- Saved with the project. A new track starts at full length.
+- Tested (`tests/tracklength.js`): 1:00 → 0:40 makes the cuts, the CTA, the credits and the export all end at 0:40; it can't go under 30 s; playback stops at the end.
+
 ## I. Known carry-overs (pre-existing on `main`, not changed)
 - Placeholder text drawn with `p.text()` in WebGL mode doesn't render, because no font is loaded (affects the Media Layers "Upload images…" prompt). v2 uses a DOM overlay for its own hints.
 - `visualizer.js` has duplicate `drawAudioWaves` / `drawMandala` / `drawTunnel` definitions (the later ones win), plus unused snake-game code.

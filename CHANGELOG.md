@@ -25,6 +25,8 @@ Built on branch `v2.4`. Installs beside the alpha with its own settings.
 - **Ctrl+Space:** full screen with every editing shelf hidden; Esc or Ctrl+Space brings them back.
 - **Shelves** (02 Input, 03 Sound, 04 Effects, Auto-Editor) are laid out like 01 File: rows with fold-outs.
 - **One main drag** for the bottom shelf; each lane and the Action Editor have their own grip.
+- **Bottom shelf as drawers:** Master, Clips, Voice, Text and Action clips share the dark Master background, with a white line and a pill handle between each pair. Dragging the main divider resizes them all evenly.
+- **Track length:** click the time under Master to shorten the song (30 s at least). Cuts, the CTA, end credits, fades and the export follow.
 - **Fixed tempo grid:** in track mode, cuts follow one grid from 0:00, the same every time the song loads — no more "Listening for tempo…". The header shows the tempo ("97 BPM · median"). Use ÷2, ×2, type a tempo, Tap (or **T**), Detected, or Live clock (the old behaviour).
 
 ### Changed

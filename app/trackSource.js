@@ -88,7 +88,8 @@ class TrackSource {
     g.setTargetAtTime(v, ctx.currentTime, rampSec / 3);
   }
 
-  play() { return this.audio ? this.audio.play() : Promise.resolve(); }
+  // A play interrupted by a pause (quick play / stop) is not an error.
+  play() { return this.audio ? this.audio.play().catch((e) => { if (!e || e.name !== 'AbortError') throw e; }) : Promise.resolve(); }
   pause() { if (this.audio) this.audio.pause(); }
   seek(seconds) {
     if (!this.audio) return;

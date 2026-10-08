@@ -285,6 +285,7 @@ class ProjectFile {
       visualMode: viz.currentMode,
       tempo: app.tempo.toJSON(),   // D-81
       masterFade: JSON.parse(JSON.stringify(app.masterFade)),   // D-92
+      trackLength: app.trackLength,   // D-97
       display: app.display ? app.display.key : 'original',
       engine: { settings: { ...e.settings }, bandTransitions: { ...e.bandTransitions } },
       layers,
@@ -489,6 +490,7 @@ Cancel = Save over it`);
     Object.assign(e.bandTransitions, project.engine.bandTransitions);
     // Tempo grid (D-81): projects from before Stable05 keep the live clock.
     app.tempo.fromJSON(project.tempo || null);
+    app.trackLength = project.trackLength || null;
     app.masterFade = project.masterFade ? { in: { ...App_masterFadeDefaults().in, ...project.masterFade.in }, out: { ...App_masterFadeDefaults().out, ...project.masterFade.out } } : App_masterFadeDefaults();
     document.querySelectorAll('#propBandMap select').forEach((sel, i) => { sel.value = e.bandTransitions[['bass', 'mid', 'high'][i]]; });
     app.timeline.syncProps();

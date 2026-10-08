@@ -66,38 +66,43 @@ ok('#10 band member tags ranked within the band by stack position', strip.tags.j
 await page.click('#clipsExpand'); await sleep(200);
 const exp = await E(() => ({ on: djApp.workspace.state.clipsExpanded, h: djApp.timeline.ROWS.clips }));
 
-// #9 Lane grips: drag the master lane's lower edge, double-click resets.
-const grip = async (lane) => E((lane) => { const g = document.querySelector(`.lane-grip[data-lane="${lane}"]`); const r = g.getBoundingClientRect(); return { x: r.left + 200, y: r.top + r.height / 2 }; }, lane);
-let p = await grip('master');
-await page.mouse.move(p.x, p.y); await page.mouse.down(); await page.mouse.move(p.x, p.y + 40, { steps: 5 }); await page.mouse.up(); await sleep(200);
-const after = await E(() => ({ master: djApp.timeline.ROWS.master, ch: document.querySelector('.ch-master').getBoundingClientRect().height, canvas: djApp.timeline.H }));
-// the Action Editor's own grip (lower edge, like a lane), and the one main drag (viewport ↕ editor)
-const sp = await E(() => { const g = document.getElementById('binGrip'); g.scrollIntoView({ block: 'nearest' }); const r = g.getBoundingClientRect(); return { x: r.left + 300, y: r.top + 3, old: !!document.getElementById('binSplitter') }; });
-const bin0 = await E(() => document.getElementById('clipBin').getBoundingClientRect().height);
-await page.mouse.move(sp.x, sp.y); await page.mouse.down(); await page.mouse.move(sp.x, sp.y + 30, { steps: 5 }); await page.mouse.up(); await sleep(200);
-const bin1 = await E(() => document.getElementById('clipBin').getBoundingClientRect().height);
+// #9 Drawers (D-96): dividers on the lines between drawers trade height;
+// the one main drag scales them all evenly; nothing scrolls.
+const lay = () => E(() => {
+  const H = (q) => Math.round(document.querySelector(q).getBoundingClientRect().height);
+  const m = document.getElementById('editorMain'), bin = document.getElementById('clipBin').getBoundingClientRect(), ed = document.getElementById('editorPanel').getBoundingClientRect();
+  const divs = [...document.querySelectorAll('.drawer-div')].map(d => { const r = d.getBoundingClientRect(); return { key: d.dataset.between, x: r.left + r.width / 2, y: r.top + r.height / 2, pill: !!d.querySelector('.drawer-pill') }; });
+  return { R: { ...djApp.timeline.ROWS }, bin: Math.round(bin.height), chMaster: H('.ch-master'), scrolls: m.scrollHeight > m.clientHeight + 1, binBottomGap: Math.round(ed.bottom - bin.bottom), divs, oldGrips: document.querySelectorAll('.lane-grip, #binSplitter, #binGrip').length };
+});
+const l0 = await lay();
+const dMC = l0.divs.find(d => d.key === 'master|clips');
+await page.mouse.move(dMC.x, dMC.y); await page.mouse.down(); await page.mouse.move(dMC.x, dMC.y + 20, { steps: 5 }); await page.mouse.up(); await sleep(250);
+const l1 = await lay();
 const vs = await E(() => { const r = document.getElementById('panelSplitter').getBoundingClientRect(); return { x: r.left + 300, y: r.top + 3 }; });
 const ed0 = await E(() => document.getElementById('editorPanel').getBoundingClientRect().height);
-await page.mouse.move(vs.x, vs.y); await page.mouse.down(); await page.mouse.move(vs.x, vs.y - 50, { steps: 5 }); await page.mouse.up(); await sleep(200);
+await page.mouse.move(vs.x, vs.y); await page.mouse.down(); await page.mouse.move(vs.x, vs.y - 90, { steps: 6 }); await page.mouse.up(); await sleep(300);
 const ed1 = await E(() => document.getElementById('editorPanel').getBoundingClientRect().height);
+const l2 = await lay();
 const saved = await E(() => JSON.parse(localStorage.getItem('bssmnt.layout')));
-ok('#10 header toggle expands the clip lane to full size', exp.on && exp.h === 64);
-ok('#9 lane lower edge drags (lane and its header grow together)', after.master === 112 && Math.round(after.ch) === 112, JSON.stringify(after));
-ok('#9 one main drag (viewport ↕ editor); the Action Editor has its own lower-edge grip like the lanes', !sp.old && bin1 > bin0 + 25 && ed1 > ed0 + 45, `Action Editor ${Math.round(bin0)}→${Math.round(bin1)} px, editor ${Math.round(ed0)}→${Math.round(ed1)} px`);
-ok('#9 the layout is one list of heights, saved', saved && saved.lanes.master === 112 && saved.bin > 0 && saved.editor > 0 && saved.clipsExpanded === true, JSON.stringify(saved));
+ok('#10 header toggle expands the clip lane to full size', exp.on && exp.h > 38);
+ok('#9 a divider (white line, pill in the middle) on every line between drawers, the Action clips included; no old grips', l0.divs.length === 2 && l0.divs.every(d => d.pill) && l0.divs.map(d => d.key).join() === 'master|clips,clips|bin' && l0.oldGrips === 0, JSON.stringify(l0.divs.map(d => d.key)));
+ok('#9 dragging a divider trades height between its two drawers (header follows)', l1.R.master - l0.R.master >= 18 && l0.R.clips - l1.R.clips >= 18 && l1.bin === l0.bin && l1.chMaster === l1.R.master, JSON.stringify({ master: [l0.R.master, l1.R.master], clips: [l0.R.clips, l1.R.clips], bin: [l0.bin, l1.bin] }));
+const ratio = (l) => [l.R.master / l.bin, l.R.clips / l.bin].map(v => +v.toFixed(2));
+ok('#9 the one main drag grows every drawer evenly; nothing scrolls; the Action clips end at the shelf bottom (no control under the main drag)', ed1 > ed0 + 80 && l2.R.master > l1.R.master && l2.bin > l1.bin && Math.abs(ratio(l2)[0] - ratio(l1)[0]) < 0.05 && Math.abs(ratio(l2)[1] - ratio(l1)[1]) < 0.05 && !l2.scrolls && l2.binBottomGap <= 1, JSON.stringify({ editor: [Math.round(ed0), Math.round(ed1)], ratios: [ratio(l1), ratio(l2)], scrolls: l2.scrolls, gap: l2.binBottomGap }));
+ok('#9 the layout is one record of shares, saved', saved && saved.lanes.master > 72 && saved.editor > 0 && saved.clipsExpanded === true, JSON.stringify(saved.lanes));
 
 // Remembered across a reload.
 await page.reload({ waitUntil: 'networkidle0' }); await sleep(1500);
-const back = await E(() => ({ master: djApp.timeline.ROWS.master, clips: djApp.timeline.ROWS.clips, exp: djApp.workspace.state.clipsExpanded, ed: Math.round(document.getElementById('editorPanel').getBoundingClientRect().height) }));
-ok('#9 sizes and the expanded lane are remembered after reopening', back.master === 112 && back.exp && back.clips === 64 && Math.abs(back.ed - ed1) <= 1, JSON.stringify(back));
+const back = await E(() => ({ master: djApp.timeline.ROWS.master, exp: djApp.workspace.state.clipsExpanded, ed: Math.round(document.getElementById('editorPanel').getBoundingClientRect().height) }));
+ok('#9 sizes and the expanded lane are remembered after reopening', Math.abs(back.master - l2.R.master) <= 2 && back.exp && Math.abs(back.ed - ed1) <= 1, JSON.stringify(back));
 
-// Double-click resets.
+// Double-click a divider resets its two drawers.
 await boot();
-p = await grip('master');
-await page.mouse.click(p.x, p.y, { clickCount: 2 }); await sleep(200);
-await page.mouse.click(sp.x, (await E(() => { const g = document.getElementById('binGrip'); g.scrollIntoView({ block: 'nearest' }); return g.getBoundingClientRect().top + 3; })), { clickCount: 2 }); await sleep(200);
-const reset = await E(() => ({ master: djApp.timeline.ROWS.master, bin: djApp.workspace.state.bin }));
-ok('#9 double-click resets a lane and the Action Editor split', reset.master === 72 && reset.bin === null, JSON.stringify(reset));
+const l3 = await lay();
+const d3 = l3.divs.find(d => d.key === 'master|clips');
+await page.mouse.click(d3.x, d3.y, { clickCount: 2 }); await sleep(250);
+const reset = await E(() => ({ master: djApp.workspace.state.lanes.master, clips: djApp.workspace.state.lanes.clips }));
+ok('#9 double-click on a divider resets its two drawers', reset.master === 72 && reset.clips === 64, JSON.stringify(reset));
 
 // #11 AE panel: Global edit collapsible; Band members; chip selects card.
 const ae = await E(async () => {

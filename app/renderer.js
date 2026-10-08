@@ -112,7 +112,7 @@ class OfflineRenderer {
   plan() {
     const app = this.app, rec = app.record;
     const track = app.isTrackMode() && app.trackSource.isLoaded;
-    const duration = track ? app.trackSource.duration : rec.duration;
+    const duration = track ? app.songLength() : rec.duration;   // the set track length (D-97)
     const frames = Math.ceil(duration * SessionRecord.FPS);
     let recorded = 0, first = -1, last = -1;
     for (let i = 0; i < frames; i++) if (rec.frame(i)) { recorded++; if (first < 0) first = i; last = i; }

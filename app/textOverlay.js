@@ -157,7 +157,7 @@ class TextOverlay {
     }
     if (it.anchor === 'start') return [Math.max(0, +it.start || 0), Math.max(0, +it.start || 0) + d];
     if (it.anchor === 'end') {
-      const end = this.app.isTrackMode() ? this.app.trackSource.duration : 0;
+      const end = this.app.isTrackMode() ? this.app.songLength() : 0;
       return end > 0 ? [Math.max(0, end - d), end] : null;
     }
     return [Math.max(0, +it.start || 0), Math.max(0, +it.start || 0) + d];

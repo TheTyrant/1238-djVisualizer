@@ -388,10 +388,11 @@ class FastPass {
     // Cuts: fast ones only where nothing was played for real.
     e.segments = e.segments.filter(s => s.pass !== 'fast');
     if (sim) {
-      sim.closeOpenSegment(d.duration);
+      const songEnd = Math.min(d.duration, app.songLength() || d.duration);
+      sim.closeOpenSegment(songEnd);
       const played = FastPass.spans(e.segments.map(s => [s.start, s.end == null ? e.lastAdvanceTime : s.end]));
       const pieces = [];
-      sim.edl().forEach(s => FastPass.subtract([s.start, s.end], played).forEach(([a, b]) => {
+      sim.edl().filter(s => s.start < songEnd).forEach(s => FastPass.subtract([s.start, Math.min(s.end, songEnd)], played).forEach(([a, b]) => {
         if (b - a < 1 / FastPass.FPS) return;   // slivers under a frame: nothing to see
         const cut = { ...s, start: a, end: b, inPoint: s.inPoint + (a - s.start) * (s.speed || 1), pass: 'fast', fast: true };
         if (a > s.start) { cut.transition = 'jump'; cut.blendSec = 0; cut.fadeIn = false; }   // split by a played take: no new fade
@@ -414,7 +415,7 @@ class FastPass {
     sim.assets = e.assets;
     sim.settings = e.settings;
     sim.bandTransitions = e.bandTransitions;
-    sim.songDuration = () => this.data.duration;
+    sim.songDuration = () => Math.min(this.data.duration, this.app.songLength() || this.data.duration);
     sim.isAdvancing = () => true;
     const g = this.app.tempo;
     // The grid in use; with the live clock chosen, unplayed parts still

@@ -1326,14 +1326,19 @@ button.bin-dur.is-set { background: var(--ink); color: var(--paper); }
 /* Timeline area scrolls when its lanes are taller than the room (D-84). */
 /* One stack: the lanes, then the Action Editor, each with its own grip;
    the editor (the one main drag) scrolls when they're taller (D-84). */
-.editor-main { grid-template-rows: auto minmax(120px, 1fr) 6px; overflow-y: auto; overflow-x: hidden; }
-.editor-main.has-bin-h { grid-template-rows: auto var(--bin-h) 6px; }
-.bin-grip { position: static; grid-column: 1 / -1; height: 6px; border-top: 1px solid var(--hair); }
+/* Drawers (D-96): the shelf is split between them, nothing scrolls. */
+.editor-main { position: relative; grid-template-rows: auto var(--bin-h, 150px); overflow: hidden; }
 .tl-area {
   grid-column: 1 / -1; display: grid; grid-template-columns: 112px 1fr;
   position: relative; min-height: 0; overflow: visible;
 }
-.lane-grips { position: absolute; left: 0; right: 0; top: 0; height: 0; z-index: 2; }
+.lane-grips { position: absolute; left: 112px; right: 0; top: 0; height: 0; z-index: 4; }
+/* Divider between two drawers: a 1 px white line, a pill in the middle */
+.drawer-div { position: absolute; left: 0; right: 0; height: 11px; margin-top: -5px; cursor: row-resize; touch-action: none; }
+.drawer-div::before { content: ""; position: absolute; left: 0; right: 0; top: 5px; height: 1px; background: rgba(255, 255, 255, 0.85); }
+.drawer-pill { position: absolute; left: 50%; top: 1px; width: 36px; height: 9px; margin-left: -18px; border-radius: 5px; background: #ffffff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35); }
+.drawer-div:hover .drawer-pill, .drawer-div.dragging .drawer-pill { background: var(--scope-c1, #38B6FF); }
+.drawer-div:hover::before, .drawer-div.dragging::before { background: #ffffff; }
 .lane-grip { position: absolute; left: 0; right: 0; height: 6px; cursor: row-resize; }
 .lane-grip:hover, .lane-grip.dragging { background: var(--high); opacity: 0.45; }
 .lane-split {
@@ -1475,3 +1480,22 @@ body.clean-view .topbar, body.clean-view .sidebar, body.clean-view .bottom-area,
 body.clean-view .tab-rail, body.clean-view .status-overlay, body.clean-view .viewport-hud,
 body.clean-view .viewport-hint, body.clean-view .text-handle, body.clean-view .place-handle { display: none !important; }
 body.clean-view .main-content { grid-column: 1 / -1; grid-row: 1 / -1; }
+
+/* Drawers share the Master lane's dark background (D-96) */
+.clip-bin { background: var(--scope-bg-1); color: #ECE8E1; }
+.clip-bin .bin-group-head { color: rgba(236, 232, 225, 0.75); }
+.clip-bin .bin-group { border-right-color: rgba(236, 232, 225, 0.25); }
+.clip-bin .bin-add { background: transparent; color: #ECE8E1; border-color: rgba(236, 232, 225, 0.5); }
+.clip-bin .bin-add:hover { background: rgba(255, 255, 255, 0.08); }
+.lanes { background: var(--scope-bg-1); }
+/* Lane labels in the shelves' text and icon style, same sizes */
+.ch-name { font: 600 12px var(--font-ui); text-transform: none; letter-spacing: 0; }
+.ch-sub { font: 500 9px var(--font-mono); text-transform: none; letter-spacing: 0.02em; color: var(--ink-3); }
+.ch-mute { border-color: var(--hair); background: transparent; color: var(--ink-2); font: 500 10px var(--font-mono); }
+.ch-mute:hover:not(:disabled) { background: var(--steel); color: var(--ink); }
+.ch-time { align-self: flex-start; margin-top: 2px; padding: 0 4px; height: 16px; border: 1px solid var(--hair); background: transparent; color: var(--ink); font: 600 10px var(--font-mono); cursor: pointer; }
+.ch-time:hover { background: var(--steel); }
+.ch-time.is-set { border-color: var(--high); color: var(--high); }
+.len-pop { width: 300px; }
+.len-pop input[type="range"] { width: 100%; }
+.clip-bin .bin-card { color: var(--ink); }   /* cards keep their own colours on the dark drawer */

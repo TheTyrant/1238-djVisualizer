@@ -39,6 +39,7 @@ class TimelinePanel {
     this.initBin();
     this.initCanvasInteraction();
     this.initMasterFades();
+    this.initTrackLength();
 
     // Text lane appears once there is any text (D-60).
     this.app.text.on(() => {
@@ -737,7 +738,7 @@ class TimelinePanel {
     c.addEventListener('wheel', (e) => {
       if (!this.app.isTrackMode()) return;
       e.preventDefault();
-      const dur = this.app.trackSource.duration || 1;
+      const dur = this.app.songLength() || 1;
       if (e.ctrlKey || e.metaKey) {
         const t = timeAt(e);
         const span = Math.max(2, Math.min(dur, this.view.span * (e.deltaY > 0 ? 1.15 : 0.87)));
@@ -751,6 +752,48 @@ class TimelinePanel {
       this.view.fit = this.view.span >= dur;
     }, { passive: false });
     c.addEventListener('dblclick', () => { this.view.fit = true; });
+  }
+
+  // ---- master track length (D-97) ------------------------------------------
+
+  initTrackLength() {
+    const btn = document.getElementById('masterLength');
+    if (!btn) return;
+    const pop = document.createElement('div');
+    pop.className = 'clip-pop len-pop';
+    pop.id = 'trackLengthPop';
+    pop.setAttribute('role', 'dialog');
+    pop.setAttribute('aria-label', 'Track length');
+    pop.hidden = true;
+    pop.innerHTML = `<div class="clip-pop-head"><span class="clip-pop-k">Track length</span><span class="clip-pop-name" id="lenFull"></span></div>
+      <input type="range" id="lenRange" min="30" step="0.5" aria-label="Length">
+      <div class="clip-pop-row"><label>Min <input type="number" id="lenMin" min="0" step="1"></label><label>Sec <input type="number" id="lenSec" min="0" max="59.9" step="0.5"></label></div>
+      <p class="clip-pop-note">The song ends here: cuts, positions (CTA), end-locked text, fades and the export follow. 30 s at least.</p>
+      <div class="clip-pop-row"><button type="button" class="btn" id="lenAll">Full length</button><button type="button" class="btn btn-primary" id="lenDone">Done</button></div>`;
+    document.body.appendChild(pop);
+    const $ = (id) => pop.querySelector('#' + id);
+    const sync = () => {
+      const d = this.app.trackSource.duration || 0, L = this.app.songLength();
+      $('lenRange').max = d; $('lenRange').value = L;
+      $('lenMin').value = Math.floor(L / 60); $('lenSec').value = +(L % 60).toFixed(1);
+      $('lenFull').textContent = `of ${fmtTime(d, false)}`;
+    };
+    const set = (s) => { this.app.setTrackLength(s); sync(); };
+    $('lenRange').addEventListener('input', () => set(parseFloat($('lenRange').value)));
+    const fromFields = () => set((parseFloat($('lenMin').value) || 0) * 60 + (parseFloat($('lenSec').value) || 0));
+    $('lenMin').addEventListener('change', fromFields);
+    $('lenSec').addEventListener('change', fromFields);
+    $('lenAll').addEventListener('click', () => set(null));
+    $('lenDone').addEventListener('click', () => { pop.hidden = true; });
+    btn.addEventListener('click', () => {
+      if (!pop.hidden) { pop.hidden = true; return; }
+      sync();
+      pop.hidden = false;
+      const r = btn.getBoundingClientRect();
+      pop.style.left = `${Math.max(8, r.left)}px`;
+      pop.style.top = `${Math.max(8, r.top - pop.offsetHeight - 8)}px`;
+    });
+    document.addEventListener('pointerdown', (e) => { if (!pop.hidden && !pop.contains(e.target) && e.target !== btn) pop.hidden = true; });
   }
 
   // ---- master fades (D-92) ------------------------------------------------
@@ -830,6 +873,9 @@ class TimelinePanel {
 
   // While looping: past the end of the selection → back to its start.
   loopCheck() {
+    // A shortened master track (D-97) stops at its end.
+    const app = this.app;
+    if (app.trackLength && app.isTrackMode() && app.trackSource.isPlaying && app.masterTime() >= app.songLength() - 0.02 && !(this.looping && this.selection)) app.toggleAudio();
     const s = this.selection;
     if (!this.looping || !s || !this.app.timelineRolling()) return;
     const t = this.app.masterTime();
@@ -915,6 +961,7 @@ class TimelinePanel {
   }
 
   resizeCanvas() {
+    if (this.app.workspace) this.app.workspace.compute();   // drawer heights (D-96)
     const dpr = window.devicePixelRatio || 1;
     const w = this.canvas.clientWidth;
     const R = this.ROWS;
@@ -987,9 +1034,17 @@ class TimelinePanel {
     this.el.band.textContent = st.dominant.toUpperCase();
     this.el.band.className = `lcd-v band-chip ${st.dominant}`;
 
-    this.el.badge.textContent = track ? `TRACK ${fmtTime(this.app.trackSource.duration, false)}` : 'LIVE';
+    this.el.badge.textContent = track ? `TRACK ${fmtTime(this.app.songLength(), false)}` : 'LIVE';
     this.el.badge.className = `badge ${track ? 'track' : 'live'}`;
-    this.el.masterSub.textContent = track ? 'Track file' : 'Live session';
+    this.el.masterSub.textContent = track ? 'Track' : 'Live session';
+    // The track's length, monitored under its label; click to set it (D-97).
+    const lenBtn = document.getElementById('masterLength');
+    if (lenBtn) {
+      lenBtn.hidden = !track;
+      const txt = track ? `${fmtTime(this.app.songLength(), false)}${this.app.trackLength ? ' ✂' : ''}` : '';
+      if (lenBtn.textContent !== txt) lenBtn.textContent = txt;
+      lenBtn.classList.toggle('is-set', !!this.app.trackLength);
+    }
     if (this.el.topSource) this.el.topSource.textContent = this.app.audioSourceMode === 'file' ? 'TRACK' : 'LIVE';
     this.canvas.classList.toggle('no-seek', !track);
 
@@ -1086,6 +1141,16 @@ class TimelinePanel {
     C.a = (alpha) => `rgba(${inkRGB},${alpha})`;
     C.pa = (alpha) => `rgba(${paperRGB},${alpha})`;
     C.scope = Scope.palette();
+    // Drawers (Omar, 2026-10-08; D-96): every lane below the ruler has the
+    // Master lane's dark background in both skins, so lanes are drawn with
+    // the dark skin's ink. The ruler keeps the skin's colours.
+    const scopeBg = this.color('--scope-bg-1') || '#0B1120', scopeBg2 = this.color('--scope-bg-2') || '#131D33';
+    const D = {
+      ...C, ink: '#ECE8E1', ink3: '#8F8C86', paper: '#0F1012', surface: scopeBg, steel: scopeBg, steel2: scopeBg2,
+      bass: '#FF5C5C', mid: '#3DCB80', high: '#5C8DFF', live: '#FF4A42',
+      bassInk: '#0F1012', midInk: '#0F1012', highInk: '#0F1012',
+      a: (alpha) => `rgba(236,232,225,${alpha})`, pa: (alpha) => `rgba(15,16,18,${alpha})`, scope: C.scope,
+    };
     const { start, span } = this.view;
     const x = (t) => ((t - start) / span) * W;
     const now = this.app.masterTime();
@@ -1095,14 +1160,13 @@ class TimelinePanel {
 
     // Backgrounds
     ctx.fillStyle = C.surface; ctx.fillRect(0, 0, W, R.ruler);
-    ctx.fillStyle = C.steel; ctx.fillRect(0, yMaster, W, R.master);
-    ctx.fillStyle = C.surface; ctx.fillRect(0, yClips, W, R.clips);
+    ctx.fillStyle = D.surface; ctx.fillRect(0, yMaster, W, H - yMaster);
 
     // Track end region (bounded mode)
     if (this.app.isTrackMode()) {
-      const endX = x(this.app.trackSource.duration);
+      const endX = x(this.app.songLength());
       if (endX < W) {
-        ctx.fillStyle = C.steel2;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
         ctx.fillRect(endX, yMaster, W - endX, H - yMaster);
       }
     }
@@ -1117,35 +1181,35 @@ class TimelinePanel {
       const bx = Math.round(x(b.time)) + 0.5;
       const isBar = b.index % bpb === 0;
       if (!isBar && pxPerBeat < 6) continue;
-      ctx.strokeStyle = isBar ? C.a(0.28) : C.a(0.09);
+      ctx.strokeStyle = isBar ? D.a(0.22) : D.a(0.08);
       ctx.beginPath(); ctx.moveTo(bx, yMaster); ctx.lineTo(bx, H); ctx.stroke();
       if (isBar && pxPerBeat * bpb > 22) {
-        ctx.fillStyle = C.ink3;
+        ctx.fillStyle = D.ink3;
         ctx.font = '9px "JetBrains Mono", monospace';
         ctx.fillText(String(b.index / bpb + 1), bx + 3, yMaster + 10);
       }
     }
 
     this.drawRuler(ctx, C, x, W, R);
-    this.drawMaster(ctx, C, x, W, yMaster, R.master, now);
-    this.drawFadeRamps(ctx, C, x, yMaster, R.master);
-    this.drawClips(ctx, C, x, W, yClips, R.clips, now);
-    if (this.app.voice.isLoaded) this.drawVoice(ctx, C, x, W, yClips + R.clips, R.voice);
-    if (this.app.text.items.length) this.drawText(ctx, C, x, W, this.textLaneY(), R.text);
+    this.drawMaster(ctx, D, x, W, yMaster, R.master, now);
+    this.drawFadeRamps(ctx, D, x, yMaster, R.master);
+    this.drawClips(ctx, D, x, W, yClips, R.clips, now);
+    if (this.app.voice.isLoaded) this.drawVoice(ctx, D, x, W, yClips + R.clips, R.voice);
+    if (this.app.text.items.length) this.drawText(ctx, D, x, W, this.textLaneY(), R.text);
 
     this.drawSelection(ctx, C, x, H);
 
     // Row rules
     ctx.fillStyle = C.ink;
     ctx.fillRect(0, R.ruler - 1, W, 1);
-    ctx.fillStyle = C.a(0.16);
-    ctx.fillRect(0, yClips - 1, W, 1);
-
-    // Playhead
+    // Playhead: skin ink on the ruler, white over the dark drawers.
     const px = Math.round(x(now)) + 0.5;
     if (px >= 0 && px <= W) {
-      ctx.strokeStyle = C.ink; ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.moveTo(px, R.ruler - 6); ctx.lineTo(px, H); ctx.stroke();
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = C.ink;
+      ctx.beginPath(); ctx.moveTo(px, R.ruler - 6); ctx.lineTo(px, R.ruler); ctx.stroke();
+      ctx.strokeStyle = '#ffffff';
+      ctx.beginPath(); ctx.moveTo(px, R.ruler); ctx.lineTo(px, H); ctx.stroke();
       ctx.lineWidth = 1;
       const label = fmtTime(now, true);
       ctx.font = '700 10px "JetBrains Mono", monospace';
@@ -1238,8 +1302,8 @@ class TimelinePanel {
   drawBandStrip(ctx, C, x, W, y, h, now) {
     const { start, span } = this.view;
     const top = y + 4, sh = h - 18, oy = y + h - 11, oh = 7;
-    const fill = { bass: C.bass, mid: C.mid, high: C.high, any: C.steel2 };
-    const ink = { bass: this.color('--bass-ink'), mid: this.color('--mid-ink'), high: this.color('--high-ink'), any: C.ink };
+    const fill = { bass: C.bass, mid: C.mid, high: C.high, any: '#9AA0AC' };
+    const ink = { bass: C.bassInk || this.color('--bass-ink'), mid: C.midInk || this.color('--mid-ink'), high: C.highInk || this.color('--high-ink'), any: '#0F1012' };
     const tags = this.engine.memberTags();
     const current = this.engine.current && this.engine.current.segment;
     // over-stream row
@@ -1373,7 +1437,7 @@ class TimelinePanel {
       for (let k = 0; k < 24; k++) {
         const t = now + (st.nextCutPos + k * st.globalBeats - st.position) * beatSec;
         if (t > start + span) break;
-        if (this.app.isTrackMode() && t > this.app.trackSource.duration) break;
+        if (this.app.isTrackMode() && t > this.app.songLength()) break;
         const gx = Math.round(x(t)) + 0.5;
         ctx.beginPath(); ctx.moveTo(gx, top); ctx.lineTo(gx, top + bh); ctx.stroke();
       }
