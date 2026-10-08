@@ -1433,3 +1433,6 @@ button.bin-dur.is-set { background: var(--ink); color: var(--paper); }
 .bin-section.selected { outline: 2px solid var(--ink); outline-offset: 1px; }
 .bin-section.is-off { opacity: 0.4; }
 .bin-section:focus-visible { outline: 2px solid var(--high); outline-offset: 1px; }
+/* Titles (D-89): Screen lock offset X / Y side by side */
+.prop-row-3:has(#textOx) { grid-template-columns: 72px 1fr 1fr; }
+#textOx, #textOy { min-width: 0; width: 100%; }

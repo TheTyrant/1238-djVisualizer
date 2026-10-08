@@ -54,6 +54,7 @@ tests/
   alpha-open.js            An alpha (format 1) project opens with the same cuts, settings and frames (fixtures/alpha-v1.mnt)
   fastpass.js              Step 1: fast pass, tempo grid, ×2/÷2/type-in, played-wins, refill, cancel, never-played export
   workspace.js             Step 3: card contrast, band strip = cut list, member tags, handles + reset + remembered, AE panel, group by band
+  titles.js                Step 4c: CTA-locked title follows the CTA, screen lock, 9:16 safe areas, presets export as drawn
   placement.js             Step 4: layers pixel-identical to the alpha, over stream, locked Over, 16:9 / 9:16 drag, export
   fixtures/legacy-layers.js  The alpha's Media Layer drawing, verbatim (reference for placement.js)
   clipmodel.js             Step 2: amount used, sections, speed, Fit to bars, export frames + pitch, save/reopen, Sections editor by mouse

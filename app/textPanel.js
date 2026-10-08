@@ -28,7 +28,7 @@ class TextPanel {
 
   timeText(it) {
     const w = this.text.windowOf(it);
-    if (!w) return it.anchor === 'end' ? 'End · live: Show now' : '—';
+    if (!w) return it.anchor === 'end' ? 'End · live: Show now' : it.anchor === 'clip' ? 'Follows a clip that has no position yet' : '—';
     return `${fmtTime(w[0], true)}–${fmtTime(w[1], true)}`;
   }
 
@@ -83,9 +83,15 @@ class TextPanel {
 
     // Timing / lock
     const g2 = ap.group('Lock & timing');
-    const anchor = this.segment([['start', 'Start'], ['time', 'At time'], ['end', 'End']], it.anchor, (v) => up({ anchor: v, firedAt: null }), 'textAnchor');
+    const anchor = this.segment([['start', 'Start'], ['time', 'At time'], ['end', 'End'], ['clip', 'Clip']], it.anchor, (v) => up(v === 'clip' ? { anchor: v, firedAt: null, lockRole: it.lockRole || 'cta' } : { anchor: v, firedAt: null }), 'textAnchor');
     g2.appendChild(anchor);
-    if (it.anchor !== 'end') {
+    if (it.anchor === 'clip') {
+      // Locked to a positioned clip (D-89): plays for exactly its block.
+      const labels = { hook: 'Hook', result: 'Result / Climax', cta: 'CTA' };
+      const held = this.app.clipEngine.storyAssets();
+      const role = ap.select(Object.entries(labels).map(([k, l]) => [k, held[k] ? `${l} — ${held[k].name}` : `${l} (no clip yet)`]), it.lockRole || 'cta', (v) => up({ lockRole: v }), 'textLockRole', 'The title follows this positioned clip');
+      g2.appendChild(this.row('Follows', role));
+    } else if (it.anchor !== 'end') {
       const start = this.num(it.start, 0, 0.1, (v) => up({ start: v }), 'textStart');
       const use = document.createElement('button');
       use.type = 'button';
@@ -95,7 +101,7 @@ class TextPanel {
       use.addEventListener('click', () => up({ start: +this.app.masterTime().toFixed(1), anchor: it.anchor === 'start' && this.app.masterTime() > 0 ? 'time' : it.anchor }));
       g2.appendChild(this.row('Starts (s)', start, use));
     }
-    g2.appendChild(this.row('Length (s)', this.num(it.duration, 0.5, 0.5, (v) => up({ duration: v }), 'textDuration')));
+    if (it.anchor !== 'clip') g2.appendChild(this.row('Length (s)', this.num(it.duration, 0.5, 0.5, (v) => up({ duration: v }), 'textDuration')));
     const when = document.createElement('p');
     when.className = 'hint';
     when.textContent = `On screen: ${this.timeText(it)}`;
@@ -137,6 +143,11 @@ class TextPanel {
     }
     g3.appendChild(bar);
     const mark = (row, key) => { if (over.includes(key)) row.classList.add('is-override'); return row; };
+    if (it.kind !== 'credits') {
+      const presets = [['', 'Choose a preset…'], ...Object.entries(TextOverlay.PRESETS).map(([k, v]) => [k, v.label])];
+      const pre = ap.select(presets, '', (v) => { if (v) this.text.applyPreset(it.id, v); }, 'textPreset', 'Trend presets: a look and an animation in one go');
+      g3.appendChild(this.row('Trend', pre));
+    }
     g3.appendChild(this.row('Font', ap.select([['display', 'Display (Boldonse)'], ['sans', 'Sans'], ['mono', 'Mono'], ['serif', 'Serif']], S.font, (v) => up({ style: { font: v } }), 'textFont')));
     g3.appendChild(mark(this.row('Size', this.segment([['s', 'S'], ['m', 'M'], ['l', 'L'], ['xl', 'XL']], S.size, (v) => up({ style: { size: v } }), 'textSize')), 'size'));
     const color = document.createElement('input');
@@ -148,9 +159,33 @@ class TextPanel {
     g3.appendChild(this.row('Colour', color));
     g3.appendChild(mark(this.row('Align', this.segment([['left', 'Left'], ['center', 'Centre'], ['right', 'Right']], S.align, (v) => up({ style: { align: v } }), 'textAlign')), 'align'));
     if (it.anim !== 'roll') {
-      const positions = [['top', 'Top'], ['center', 'Centre'], ['lower', 'Lower third'], ['bottom', 'Bottom']];
+      const positions = [['top', 'Top'], ['center', 'Centre'], ['lower', 'Lower third'], ['bottom', 'Bottom'], ['anchor', 'Screen lock (anchor + offset)']];
       if (it.kind === 'text' || S.position === 'free') positions.push(['free', 'Free (drag on screen)']);
       g3.appendChild(mark(this.row('Position', ap.select(positions, S.position, (v) => up({ style: v === 'free' && S.x == null ? { position: v, x: 0.5, y: 0.5 } : { position: v } }), 'textPosition')), over.includes('x') ? 'x' : 'position'));
+      if (S.position === 'anchor') {
+        // Screen lock (D-89): 9-point anchor, offset, optional 9:16 safe areas.
+        const grid = document.createElement('div');
+        grid.className = 'anchor-grid';
+        grid.id = 'textAnchorGrid';
+        grid.setAttribute('role', 'radiogroup');
+        grid.setAttribute('aria-label', 'Anchor');
+        Object.keys(TextOverlay.ANCHORS).forEach(k => {
+          const b = document.createElement('button');
+          b.type = 'button'; b.dataset.v = k;
+          b.setAttribute('aria-checked', String((S.anchor || 'mc') === k));
+          b.setAttribute('aria-label', k);
+          if ((S.anchor || 'mc') === k) b.classList.add('on');
+          b.addEventListener('click', () => up({ style: { anchor: k, ox: 0, oy: 0, align: k[1] === 'l' ? 'left' : k[1] === 'r' ? 'right' : 'center' } }));
+          grid.appendChild(b);
+        });
+        g3.appendChild(mark(this.row('Anchor', grid), 'anchor'));
+        g3.appendChild(mark(this.row('Offset %', this.num(Math.round((S.ox || 0) * 1000) / 10, -100, 0.5, (v) => up({ style: { ox: v / 100 } }), 'textOx'), this.num(Math.round((S.oy || 0) * 1000) / 10, -100, 0.5, (v) => up({ style: { oy: v / 100 } }), 'textOy')), 'ox'));
+        const safe = document.createElement('label');
+        safe.className = 'prop-check';
+        safe.innerHTML = `<input type="checkbox" id="textSafe" ${S.safe ? 'checked' : ''}><span>Keep inside 9:16 safe areas (top ${Math.round(TextOverlay.SAFE.top * 100)} %, bottom ${Math.round(TextOverlay.SAFE.bottom * 100)} %, right ${Math.round(TextOverlay.SAFE.right * 100)} %)</span>`;
+        safe.querySelector('input').addEventListener('change', (e) => up({ style: { safe: e.target.checked } }));
+        g3.appendChild(safe);
+      }
       if (it.kind === 'text') {
         const tip = document.createElement('p');
         tip.className = 'hint';
@@ -159,7 +194,8 @@ class TextPanel {
       }
     }
     g3.appendChild(mark(this.row('Backing', this.segment([['none', 'None'], ['shadow', 'Shadow'], ['plate', 'Plate']], S.plate, (v) => up({ style: { plate: v } }), 'textPlate')), 'plate'));
-    const anims = it.kind === 'credits' ? [['roll', 'Roll'], ['fade', 'Fade'], ['none', 'None']] : [['fade', 'Fade'], ['rise', 'Rise'], ['none', 'None']];
+    const anims = it.kind === 'credits' ? [['roll', 'Roll'], ['fade', 'Fade'], ['none', 'None']]
+      : [['fade', 'Fade'], ['rise', 'Rise'], ['pop', 'Pop'], ['words', 'Word by word (on the beat)'], ['slide', 'Slide in'], ['trackin', 'Track-in'], ['mask', 'Mask reveal'], ['none', 'None']];
     g3.appendChild(this.row('Animation', ap.select(anims, it.anim, (v) => up({ anim: v }), 'textAnim')));
     P.appendChild(g3);
 
@@ -205,7 +241,7 @@ class TextPanel {
     n.step = step;
     n.value = value;
     if (id) n.id = id;
-    n.addEventListener('change', () => onChange(Math.max(min, parseFloat(n.value) || min)));
+    n.addEventListener('change', () => { const v = parseFloat(n.value); onChange(Math.max(min, isNaN(v) ? min : v)); });   // 0 is a value
     return n;
   }
 }

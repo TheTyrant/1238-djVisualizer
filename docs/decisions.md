@@ -563,6 +563,22 @@ The brief's four questions were not answered before the build. Rather than guess
 - The band strip draws over cuts in its second row; the full lane draws them as a red bar on top.
 - *Not built — known gap:* the pop-out window still doesn't mirror Clip Auto-Editor mode (pre-existing, D-50 era), so it can't show over images in Clip mode yet. The viewport, fullscreen and export do.
 
+
+### D-89 · Titles: screen lock, safe areas, lock to a positioned clip, trend presets *(Accepted — built)*
+- **Screen lock** (brief #6): Position → **Screen lock (anchor + offset)**. A 9-point anchor puts that point of the text block on the same point of the frame, plus an X / Y offset (% of the frame). Dragging the block on the viewport moves the offset. Both are kept per breakpoint (D-63), so 16:9 and 9:16 can differ. Titles and credits get the drag handle in Screen lock too.
+- **9:16 safe areas:** "Keep inside 9:16 safe areas" moves the anchor frame inside top 12 %, bottom 22 % and right 14 %, the space platform UI covers. These are editable constants in `TextOverlay.SAFE`. They only apply on a vertical frame. The zones are drawn faintly on the viewport while 04 Effects is open, never in the pop-out or exports (tested).
+- **Time lock:** Start / At time / End, plus **Clip**: the title follows a positioned clip (Hook / Result / CTA) and plays exactly over its block. It moves when the block moves, e.g. when the CTA's used part changes (tested: 19–24 s → 21–24 s).
+- **Trend presets** (Look → Trend), each a look plus an animation:
+  - **Bold stack:** display font, XL, caps, pops in from 115 %.
+  - **Word by word:** one more word on each beat of the tempo grid (every 0.5 s without one), the newest popping.
+  - **Highlight word:** words in `*asterisks*` get a colour plate (yellow by default); the last word is marked if none is.
+  - **Lower third:** name plus a smaller line, with an accent bar that grows beside it, sliding in at the bottom left.
+  - **Track-in:** letter spacing closes up as it fades in.
+  - **Mask reveal:** it wipes up from behind a line that draws under it.
+- The animations are also in the Animation list on their own.
+- All of it goes through `TextOverlay.render()`, so viewport, pop-out and export match. Tested: each preset exported and compared with the same frame drawn directly — mean difference 0.3–0.7 levels.
+- *Proposed — needs Omar:* the accent colours are fixed per preset (yellow plate, red bar, white line) until a colour control is wanted.
+
 ## I. Known carry-overs (pre-existing on `main`, not changed)
 - Placeholder text drawn with `p.text()` in WebGL mode doesn't render, because no font is loaded (affects the Media Layers "Upload images…" prompt). v2 uses a DOM overlay for its own hints.
 - `visualizer.js` has duplicate `drawAudioWaves` / `drawMandala` / `drawTunnel` definitions (the later ones win), plus unused snake-game code.

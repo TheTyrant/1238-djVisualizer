@@ -15,6 +15,7 @@ Built on branch `v2.4`. Installs beside the alpha with its own settings.
 - **Auto-Editor:** "Global edit" folds away; **Band members** shows each band's clips and lights the band behind the cut on air (click a chip to select the clip). With Clip order = By band, the Action Editor groups clips by band; drag between groups to change a clip's band.
 - **Placement** for Media Layers and images: anchor, position, size, rotation, opacity, fit, blend and music reaction, with a separate layout per display shape. Drag it on the viewport. Existing layers look exactly as before.
 - **Images over video:** an image can play *over* the video (new images do by default) while the videos keep cutting underneath; one at a time, faded in and out. A locked image (Hook / Result / CTA) can sit over the video too.
+- **Titles:** Screen lock (anchor + offset, drag it on the viewport), optional 9:16 safe areas (shown faintly while editing), and a lock that makes a title follow the Hook, Result or CTA. **Trend presets:** Bold stack, Word by word (on the beat), Highlight word, Lower third, Track-in, Mask reveal; they export exactly as seen.
 - **Fixed tempo grid:** in track mode, cuts follow one grid from 0:00, the same every time the song loads — no more "Listening for tempo…". The header shows the tempo ("97 BPM · median"). Use ÷2, ×2, type a tempo, Tap (or **T**), Detected, or Live clock (the old behaviour).
 
 ### Changed
