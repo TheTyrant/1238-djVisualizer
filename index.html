@@ -166,6 +166,10 @@
 
           <section class="control-section side-panel" id="panel-input" data-tab="input" data-num="02" data-label="Input">
             <h3><span class="sec-num">02</span>Input</h3>
+            <!-- Laid out like 01 File (Omar, 2026-10-08): a menu list; anything
+                 with options folds out under its row. -->
+            <ul class="menu-list" role="menu" aria-label="Input">
+            <li role="none"><details class="menu-sub" id="menuSource" open><summary class="menu-item"><span>Source</span><span class="menu-note">live / track</span><span class="menu-caret" aria-hidden="true">&#x25B8;</span></summary><div class="menu-sub-body">
             <div class="seg source-toggle-group" role="radiogroup" aria-label="Audio source">
               <label class="source-toggle">
                 <input type="radio" name="audioSource" value="mic" id="audioSourceMic" checked>
@@ -207,14 +211,12 @@
               </div>
             </div>
 
-            <div class="btn-row">
-              <button id="start" class="btn btn-primary" type="button">Start Audio</button>
-              <button id="fullscreen" class="btn" type="button">Fullscreen</button>
-            </div>
-
-            <h4 class="sub-head">Visualization</h4>
-            <div class="field">
-              <label for="visualMode">Mode</label>
+            </div></details></li>
+            <li role="none"><button id="start" class="menu-item menu-primary" role="menuitem" type="button"><span class="menu-label">Start Audio</span><kbd>Space</kbd></button></li>
+            <li role="none"><button id="fullscreen" class="menu-item" role="menuitem" type="button"><span class="menu-label">Fullscreen</span><kbd>F</kbd></button></li>
+            <li role="separator" class="menu-sep"></li>
+            <li role="none" class="menu-item menu-select">
+              <label for="visualMode">Visual mode</label>
               <select id="visualMode">
                 <option value="spectrum">Spectrum Bars</option>
                 <option value="particles">Floating Particles</option>
@@ -227,10 +229,10 @@
                 <option value="layers">Media Layers</option>
                 <option value="clips">Clip Auto-Editor</option>
               </select>
-            </div><br>
-
+            </li>
+            <li role="separator" class="menu-sep"></li>
             <!-- Voice Over (D-38–D-41): its own audio chain, follows the master timeline -->
-            <h3><span class="sec-num">02.5</span>Voice</h3>
+            <li role="none"><details class="menu-sub" id="menuVoice" open><summary class="menu-item"><span>Voice</span><span class="menu-note">record / import</span><span class="menu-caret" aria-hidden="true">&#x25B8;</span></summary><div class="menu-sub-body">
             <div class="voice-block">
               <div class="btn-row">
                 <button id="voiceRecord" class="btn" type="button" title="Record at the playhead">&#x25CF; Record</button>
@@ -262,16 +264,18 @@
               </div>
               <p class="hint" id="voiceHint">Recording over the music? Use headphones so the speakers don’t bleed into the take.</p>
             </div>
-
+            </div></details></li>
+            </ul>
           </section>
 
           <section class="control-section side-panel" id="customMediaSection" data-tab="sound" data-num="03" data-label="Sound">
             <h3><span class="sec-num">03</span>Sound</h3>
+            <ul class="menu-list" role="menu" aria-label="Sound">
+            <li role="none"><details class="menu-sub" id="menuEq" open><summary class="menu-item"><span>EQ</span><span class="menu-note">sensitivity / dynamic</span><span class="menu-caret" aria-hidden="true">&#x25B8;</span></summary><div class="menu-sub-body">
 
             <!-- EQ (D-51): two views on one tab swap. Sensitivity = the band
                  faders (simple); Dynamic = an analysis EQ curve (advanced). The
                  "Use" radios pick what is applied: either one, or Blend (both). -->
-            <h4 class="sub-head sub-head-first">EQ</h4>
             <div class="eq-block" id="eqBlock">
               <div class="seg seg-btns eq-tabs" role="tablist" aria-label="EQ view">
                 <button type="button" role="tab" id="eqTabSens" data-v="sensitivity" aria-controls="eqPaneSens" title="Simple">Sensitivity</button>
@@ -330,19 +334,22 @@
                 </div>
                 <p class="hint" id="eqHint">Shapes what the beat and band analysis hears, so band reactions and band-driven cuts follow the part you pick (try Kick emphasis). Your sound and exports aren&rsquo;t changed. Listen lets you hear it.</p>
               </div>
-            </div> <br>
-
-            <h3><span class="sec-num">03.5</span>Assets</h3>
+            </div>
+            </div></details></li>
+            <li role="separator" class="menu-sep"></li>
             <!-- One bin for images and video (D-44). -->
+            <li role="none"><details class="menu-sub" id="menuAssets" open><summary class="menu-item"><span>Assets</span><span class="menu-note">images · video</span><span class="menu-caret" aria-hidden="true">&#x25B8;</span></summary><div class="menu-sub-body">
             <label class="asset-drop dropzone" id="assetDrop" title="Drop images or video here, or click to choose">
               <input type="file" id="assetUpload" accept="image/*,video/*,.asf,.wmv" multiple>
               <span class="bin-add-plus">+</span>
               <span>Drop images or video<br>or choose files</span>
             </label>
             <div class="asset-list" id="assetList" role="listbox" aria-label="Assets"></div>
-
-            <h4 class="sub-head">Asset timing</h4>
+            </div></details></li>
+            <li role="none"><details class="menu-sub" id="menuAssetTiming" open><summary class="menu-item"><span>Asset timing</span><span class="menu-note">the selected asset</span><span class="menu-caret" aria-hidden="true">&#x25B8;</span></summary><div class="menu-sub-body">
             <div class="asset-props" id="assetProps"></div>
+            </div></details></li>
+            </ul>
           </section>
 
 
@@ -354,8 +361,14 @@
               <li role="none"><button type="button" class="menu-item" role="menuitem" id="textAddCredits" title="Rolling credits at the end"><span>Add credits</span><span class="menu-note">end · rolls</span></button></li>
               <li role="none"><button type="button" class="menu-item" role="menuitem" id="textAddText" title="Text at the playhead"><span>Add text</span><span class="menu-note">at playhead</span></button></li>
             </ul>
+            <ul class="menu-list menu-list-cont" role="menu" aria-label="Effects">
+            <li role="none"><details class="menu-sub" id="menuTextItems" open><summary class="menu-item"><span>Items</span><span class="menu-note">on the timeline</span><span class="menu-caret" aria-hidden="true">&#x25B8;</span></summary><div class="menu-sub-body">
             <div class="asset-list" id="textList" role="listbox" aria-label="Text items"></div>
+            </div></details></li>
+            <li role="none"><details class="menu-sub" id="menuTextProps" open><summary class="menu-item"><span>Options</span><span class="menu-note">the selected item</span><span class="menu-caret" aria-hidden="true">&#x25B8;</span></summary><div class="menu-sub-body">
             <div class="asset-props" id="textProps"></div>
+            </div></details></li>
+            </ul>
           </section>
         </div>
       </aside>
@@ -405,10 +418,13 @@
         <div class="tab-panels" id="rightPanels">
           <section class="control-section side-panel editor-props" id="panel-autoedit" data-tab="autoedit" data-num="AE" data-label="Auto-Edit">
             <h3>Auto-Editor</h3>
+                <ul class="menu-list" role="menu" aria-label="Auto-Editor">
                 <!-- v2.4 (D-86): what is going on under the hood, per band -->
+                <li role="none"><details class="menu-sub" id="menuBandMembers" open><summary class="menu-item"><span>Band members</span><span class="menu-note">lit = on air</span><span class="menu-caret" aria-hidden="true">&#x25B8;</span></summary><div class="menu-sub-body">
                 <div class="prop band-members" id="bandMembers" aria-live="polite"></div>
-                <details class="ae-global" id="aeGlobal" open>
-                <summary>Global edit</summary>
+                </div></details></li>
+                <li role="none"><details class="menu-sub ae-global" id="aeGlobal" open>
+                <summary class="menu-item"><span>Global edit</span><span class="menu-note">pace · order · transition</span><span class="menu-caret" aria-hidden="true">&#x25B8;</span></summary><div class="menu-sub-body">
                 <div class="prop">
                   <div class="prop-label">Switch timing</div>
                   <div class="seg seg-btns" id="propTimingMode">
@@ -458,16 +474,17 @@
                     <option value="start">From the start</option>
                   </select>
                 </div>
-                </details>
+                </div></details></li>
 
-                <label class="prop prop-check">
+                <li role="none" class="menu-item menu-check"><label class="prop-check">
                   <input type="checkbox" id="propOverlay">
                   <span>Overlay Media Layers</span>
-                </label>
+                </label></li>
+                <li role="separator" class="menu-sep"></li>
 
                 <!-- Story Mode (D-33–D-37): off = Free Mode, unchanged automation -->
+                <li role="none"><details class="menu-sub" id="menuPositions" open><summary class="menu-item"><span>Positions</span><span class="menu-note">Hook · Result · CTA</span><span class="menu-caret" aria-hidden="true">&#x25B8;</span></summary><div class="menu-sub-body">
                 <div class="prop prop-story">
-                  <div class="prop-label">Positions</div>
                   <!-- D-58: the Free / Story switch is retired. Hook / Result / CTA
                        positions are always available in 03 Sound › Asset timing.
                   <div class="seg seg-btns" id="propStoryMode">
@@ -483,6 +500,8 @@
                   -->
                   <p class="hint" id="propStoryHint"></p>
                 </div>
+                </div></details></li>
+                </ul>
           </section>
         </div>
         <nav class="tab-rail" id="rightRail" aria-label="Right sidebar"></nav>
@@ -527,7 +546,6 @@
               </div>
               <div class="lane-grips" id="laneGrips" aria-hidden="true"></div>
               </div>
-              <div class="lane-split" id="binSplitter" role="separator" aria-orientation="horizontal" title="Drag to resize the timeline / Action Editor · double-click to reset"></div>
               <div class="ch ch-bin"><span class="ch-name">Action</span><span class="ch-sub" id="binCount">0 clips</span><span class="ch-sub ch-hint">Drag to reorder.<br>Top = most important</span></div>
               <div class="clip-bin dropzone" id="clipBin">
                 <label class="bin-add" title="Add images or video (also in 03 Sound › Assets)">
@@ -537,6 +555,7 @@
                 </label>
                 <div class="bin-cards" id="binCards" role="listbox" aria-label="Action Editor stack"></div>
               </div>
+              <div class="lane-grip bin-grip" id="binGrip" role="separator" aria-orientation="horizontal" title="Drag to resize the Action Editor · double-click to reset"></div>
             </div>
           </div>
         </section>
@@ -550,7 +569,7 @@
         <div class="help-section">
           <h4>Keyboard Shortcuts</h4>
           <p><kbd>Space</kbd> - Start/Stop Audio (play/pause in track mode)</p>
-          <p><kbd>F</kbd> - Toggle Fullscreen</p>
+          <p><kbd>F</kbd> - Toggle Fullscreen &middot; <kbd>Ctrl</kbd>+<kbd>Space</kbd> - Full screen without the editing shelves (<kbd>Esc</kbd> or <kbd>Ctrl</kbd>+<kbd>Space</kbd> brings them back)</p>
           <p><kbd>1</kbd>&ndash;<kbd>9</kbd> - Visualization modes, in menu order &middot; <kbd>0</kbd> - Clip Auto-Editor</p>
           <p><kbd>Ctrl</kbd>+<kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd> / <kbd>4</kbd> - File / Input / Sound / Effects panel (<kbd>Alt</kbd> works too)</p>
           <p><kbd>Shift</kbd>+<kbd>A</kbd> - Auto-Editor (edit controls)</p>

@@ -3,8 +3,8 @@
 // The layout is one small record — a list of heights — kept in this
 // build's own storage (Stable05 and the alpha don't share it, D-79):
 //   editor   the bottom editor (viewport ↕ editor handle)
-//   bin      the Action Editor (timeline ↕ Action Editor handle); null =
-//            whatever the lanes leave, as before
+//   bin      the Action Editor's height (its own grip, like a lane); null =
+//            whatever the lanes leave
 //   lanes    master / clips / voice / text heights (each lane's lower edge)
 //   clipsExpanded  clip lane full size, or the compact band strip (D-85)
 //   aeGlobalOpen   the Auto-Editor's "Global edit" section (D-86)
@@ -48,7 +48,7 @@ class Workspace {
 
   init() {
     const $ = (id) => document.getElementById(id);
-    this.el = { editor: $('editorPanel'), main: $('editorMain'), split: $('panelSplitter'), binSplit: $('binSplitter'), grips: $('laneGrips'), expand: $('clipsExpand'), clipsSub: $('chClipsSub'), ae: $('aeGlobal'), area: $('tlArea') };
+    this.el = { editor: $('editorPanel'), main: $('editorMain'), split: $('panelSplitter'), binSplit: $('binGrip'), grips: $('laneGrips'), expand: $('clipsExpand'), clipsSub: $('chClipsSub'), ae: $('aeGlobal'), area: $('tlArea') };
     const el = this.el;
     this.applyEditor();
     this.applyBin();
@@ -59,11 +59,11 @@ class Workspace {
       this.applyEditor();
     }, () => { this.state.editor = null; this.applyEditor(); });
 
-    // timeline ↕ Action Editor
+    // The Action Editor is a lane like the others: its own grip on its
+    // lower edge (Omar, 2026-10-08). The one main drag is viewport ↕ editor.
     if (el.binSplit) {
       this.drag(el.binSplit, () => this.binNow(), (h0, dy) => {
-        const max = Math.max(Workspace.BIN_MIN, el.main.getBoundingClientRect().height - 60);
-        this.state.bin = Math.round(Math.max(Workspace.BIN_MIN, Math.min(max, h0 - dy)));
+        this.state.bin = Math.round(Math.max(Workspace.BIN_MIN, Math.min(600, h0 + dy)));
         this.applyBin();
       }, () => { this.state.bin = null; this.applyBin(); });
     }
@@ -77,6 +77,13 @@ class Workspace {
       el.ae.open = this.state.aeGlobalOpen !== false;
       el.ae.addEventListener('toggle', () => { this.state.aeGlobalOpen = el.ae.open; this.save(); });
     }
+    // Every fold-out row in the shelves remembers being open or folded.
+    this.state.folds = this.state.folds || {};
+    document.querySelectorAll('.side-panel details.menu-sub[id]').forEach(d => {
+      if (d.id === 'aeGlobal') return;
+      if (d.id in this.state.folds) d.open = !!this.state.folds[d.id];
+      d.addEventListener('toggle', () => { this.state.folds[d.id] = d.open; this.save(); });
+    });
   }
 
   binNow() {

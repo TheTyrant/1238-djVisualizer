@@ -26,6 +26,8 @@ KEYBOARD SHORTCUTS
 ------------------
 Space              Play / pause (track) · start / stop (live)
 F                  Fullscreen
+Ctrl+Space         Full screen with the editing shelves hidden (only the
+                   picture); Esc or Ctrl+Space brings them back
 1 – 9              Visual modes in menu order:
                      1 Spectrum Bars   2 Floating Particles   3 Frequency Rings
                      4 Wave Forms      5 Mandala              6 Tunnel Vision

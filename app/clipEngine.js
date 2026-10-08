@@ -105,7 +105,26 @@ class ClipEngine {
   //   pace 'fit' + fitBars: set by Fit to bars — holds exactly N bars and
   //            plays its used part once from the start.
   // Defaults reproduce the alpha: whole clip, 1×, no sections.
-  static clipDefaults() { return { used: { start: 0, end: null }, speed: 1, sections: [], fitBars: null, visual: VisualLayer.defaults() }; }
+  static clipDefaults() { return { used: { start: 0, end: null }, speed: 1, sections: [], fitBars: null, visual: VisualLayer.defaults(), repeats: 0 }; }
+
+  // Repeats (Omar, 2026-10-08; D-93): how many times a clip may appear on
+  // the timeline (0 = no limit). A cut = one appearance; cuts the fast pass
+  // filled ahead of the playhead don't count (playing replaces them).
+  usesOf(clip) {
+    const t = this.clock();
+    let n = 0;
+    for (const s of this.segments) if (s.clipId === clip.id && !s.story && !(s.fast && s.start >= t - 1e-6)) n++;
+    return n;
+  }
+  spent(c) { return c.repeats > 0 && this.usesOf(c) >= c.repeats; }
+  // Every cut of it on the timeline (played and filled), for the readouts.
+  cutsOf(clip) { return this.segments.filter(s => s.clipId === clip.id && !s.story).length; }
+  setRepeats(id, n) {
+    const a = this.clipById(id);
+    if (!a) return;
+    a.repeats = Math.max(0, Math.round(+n || 0));
+    this.emit('clips');
+  }
 
   // Per-clip visual mode (D-90): recorded on each cut so the export draws
   // what was seen.
@@ -290,6 +309,7 @@ class ClipEngine {
       story: saved.story || 'none', storyHold: 3, fade: { on: false, curve: 'smooth', bars: 1, ...(saved.fade || {}) },
       used: saved.used ? { ...saved.used } : { start: 0, end: null }, speed: saved.speed || 1, sections: [], fitBars: saved.fitBars || null,
       visual: { ...VisualLayer.defaults(), ...(saved.visual || {}) },
+      repeats: saved.repeats || 0,
       ownThumb: null,
     };
     const engine = this;
@@ -468,6 +488,7 @@ class ClipEngine {
       sections: Array.isArray(saved.sections) ? saved.sections.slice() : [], fitBars: saved.fitBars || null,
       show: saved.show || 'full',   // alpha images open as Full frame (D-88)
       visual: { ...VisualLayer.defaults(), ...(saved.visual || {}) },
+      repeats: saved.repeats || 0,
       placement: saved.placement ? JSON.parse(JSON.stringify(saved.placement)) : (saved.kind === 'image' ? Placement.defaults({ size: 60, z: 10 }) : null),
     };
     this.assets.push(asset);
@@ -1017,6 +1038,10 @@ class ClipEngine {
     let clips = this.regularPool();
     if (videosOnly) clips = clips.filter(c => c.kind === 'video' || (c.kind === 'image' && c.show !== 'over'));
     if (clips.length === 0) return null;
+    // Clips that used up their repeats sit out; if every one has, all play
+    // again rather than leaving the screen empty (D-93, Proposed).
+    const fresh = clips.filter(c => !this.spent(c));
+    if (fresh.length) clips = fresh;
     const currentClip = this.current && this.current.clip;
     const s = this.settings;
 

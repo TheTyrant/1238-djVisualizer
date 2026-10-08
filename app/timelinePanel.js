@@ -279,12 +279,6 @@ class TimelinePanel {
     if (key === this.membersKey) return;
     this.membersKey = key;
     box.textContent = '';
-    const title = document.createElement('div');
-    title.className = 'prop-label';
-    title.textContent = 'Band members';
-    box.before(title);
-    if (this.membersTitle) this.membersTitle.remove();
-    this.membersTitle = title;
     ClipEngine.BANDS.forEach(b => {
       const row = document.createElement('div');
       row.className = 'bm-row' + (hot === b ? ' is-hot' : '');
@@ -541,6 +535,7 @@ class TimelinePanel {
       tags.className = 'bin-tags';
       const t = [clip.kind === 'image' ? 'IMG' : 'VID'];
       if (clip.speed && clip.speed !== 1) t.push(ClipTools.speedLabel(clip.speed));
+      if (clip.repeats > 0) t.push(`×${clip.repeats}`);
       if (clip.pace === 'fit') t.push(`${clip.fitBars} bar${clip.fitBars === 1 ? '' : 's'}`);
       else if (clip.pace !== 'global' && MusicalTime.AUTO_PACES[clip.pace]) t.push(MusicalTime.AUTO_PACES[clip.pace].label);
       if (clip.band !== 'any') t.push(clip.band);

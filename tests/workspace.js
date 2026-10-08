@@ -71,10 +71,10 @@ const grip = async (lane) => E((lane) => { const g = document.querySelector(`.la
 let p = await grip('master');
 await page.mouse.move(p.x, p.y); await page.mouse.down(); await page.mouse.move(p.x, p.y + 40, { steps: 5 }); await page.mouse.up(); await sleep(200);
 const after = await E(() => ({ master: djApp.timeline.ROWS.master, ch: document.querySelector('.ch-master').getBoundingClientRect().height, canvas: djApp.timeline.H }));
-// timeline ↕ Action Editor, and viewport ↕ editor
-const sp = await E(() => { const r = document.getElementById('binSplitter').getBoundingClientRect(); return { x: r.left + 300, y: r.top + 3 }; });
+// the Action Editor's own grip (lower edge, like a lane), and the one main drag (viewport ↕ editor)
+const sp = await E(() => { const g = document.getElementById('binGrip'); g.scrollIntoView({ block: 'nearest' }); const r = g.getBoundingClientRect(); return { x: r.left + 300, y: r.top + 3, old: !!document.getElementById('binSplitter') }; });
 const bin0 = await E(() => document.getElementById('clipBin').getBoundingClientRect().height);
-await page.mouse.move(sp.x, sp.y); await page.mouse.down(); await page.mouse.move(sp.x, sp.y - 30, { steps: 5 }); await page.mouse.up(); await sleep(200);
+await page.mouse.move(sp.x, sp.y); await page.mouse.down(); await page.mouse.move(sp.x, sp.y + 30, { steps: 5 }); await page.mouse.up(); await sleep(200);
 const bin1 = await E(() => document.getElementById('clipBin').getBoundingClientRect().height);
 const vs = await E(() => { const r = document.getElementById('panelSplitter').getBoundingClientRect(); return { x: r.left + 300, y: r.top + 3 }; });
 const ed0 = await E(() => document.getElementById('editorPanel').getBoundingClientRect().height);
@@ -83,7 +83,7 @@ const ed1 = await E(() => document.getElementById('editorPanel').getBoundingClie
 const saved = await E(() => JSON.parse(localStorage.getItem('bssmnt.layout')));
 ok('#10 header toggle expands the clip lane to full size', exp.on && exp.h === 64);
 ok('#9 lane lower edge drags (lane and its header grow together)', after.master === 112 && Math.round(after.ch) === 112, JSON.stringify(after));
-ok('#9 timeline ↕ Action Editor and viewport ↕ editor handles drag', bin1 > bin0 + 25 && ed1 > ed0 + 45, `Action Editor ${Math.round(bin0)}→${Math.round(bin1)} px, editor ${Math.round(ed0)}→${Math.round(ed1)} px`);
+ok('#9 one main drag (viewport ↕ editor); the Action Editor has its own lower-edge grip like the lanes', !sp.old && bin1 > bin0 + 25 && ed1 > ed0 + 45, `Action Editor ${Math.round(bin0)}→${Math.round(bin1)} px, editor ${Math.round(ed0)}→${Math.round(ed1)} px`);
 ok('#9 the layout is one list of heights, saved', saved && saved.lanes.master === 112 && saved.bin > 0 && saved.editor > 0 && saved.clipsExpanded === true, JSON.stringify(saved));
 
 // Remembered across a reload.
@@ -95,7 +95,7 @@ ok('#9 sizes and the expanded lane are remembered after reopening', back.master 
 await boot();
 p = await grip('master');
 await page.mouse.click(p.x, p.y, { clickCount: 2 }); await sleep(200);
-await page.mouse.click(sp.x, (await E(() => document.getElementById('binSplitter').getBoundingClientRect().top + 3)), { clickCount: 2 }); await sleep(200);
+await page.mouse.click(sp.x, (await E(() => { const g = document.getElementById('binGrip'); g.scrollIntoView({ block: 'nearest' }); return g.getBoundingClientRect().top + 3; })), { clickCount: 2 }); await sleep(200);
 const reset = await E(() => ({ master: djApp.timeline.ROWS.master, bin: djApp.workspace.state.bin }));
 ok('#9 double-click resets a lane and the Action Editor split', reset.master === 72 && reset.bin === null, JSON.stringify(reset));
 

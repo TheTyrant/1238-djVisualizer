@@ -150,6 +150,19 @@ class DJVisualizerApp {
         (t.tagName === 'INPUT' && !['range', 'checkbox', 'radio', 'file', 'button', 'submit'].includes(t.type));
       if (typing) return;
 
+      // Ctrl+Space (Omar, 2026-10-08; D-94): full screen with every editing
+      // shelf hidden — only the picture. Esc or Ctrl+Space brings them back.
+      if (e.code === 'Space' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        if (!e.repeat) this.toggleCleanView();
+        return;
+      }
+      if (e.code === 'Escape' && document.body.classList.contains('clean-view')) {
+        e.preventDefault();
+        this.toggleCleanView(false);
+        return;
+      }
+
       if (e.code === 'Space') {
         e.preventDefault();
         if (e.repeat) return;
@@ -221,6 +234,10 @@ class DJVisualizerApp {
           this.notify(this.timeline.looping ? 'Looping the selection (L to stop)' : 'Loop off');
           break;
       }
+    });
+
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement && document.body.classList.contains('clean-view') && this.cleanFullscreen) this.toggleCleanView(false);
     });
 
     // Initialize visualizer
@@ -848,8 +865,14 @@ class DJVisualizerApp {
     }
   }
 
+  // A menu row's label (its shortcut stays); plain text for any other button.
+  static setLabel(btn, text) {
+    const l = btn && btn.querySelector('.menu-label');
+    if (l) l.textContent = text; else if (btn) btn.textContent = text;
+  }
+
   setStartButton(label, live) {
-    this.startBtn.textContent = label;
+    DJVisualizerApp.setLabel(this.startBtn, label);
     this.startBtn.classList.toggle('is-live', live);
   }
 
@@ -1031,7 +1054,7 @@ class DJVisualizerApp {
     try {
       // Update UI to show attempting to start
       this.deviceStatusSpan.textContent = 'Requesting audio access...';
-      this.startBtn.textContent = 'Starting...';
+      DJVisualizerApp.setLabel(this.startBtn, 'Starting...');
       this.startBtn.disabled = true;
       
       // Use selected device or let the system auto-select
@@ -1181,15 +1204,28 @@ class DJVisualizerApp {
   }
   
   
+  // Clean view (D-94): shelves hidden, the window full screen.
+  toggleCleanView(on = !document.body.classList.contains('clean-view')) {
+    document.body.classList.toggle('clean-view', on);
+    if (on) {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => { /* not allowed here: the shelves still hide */ });
+      this.notify('Ctrl+Space or Esc brings the shelves back', 2500);
+    } else if (document.fullscreenElement && this.cleanFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+    this.cleanFullscreen = on;
+    window.dispatchEvent(new Event('resize'));
+  }
+
   toggleFullscreen() {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen().catch(err => {
         console.error('Error entering fullscreen:', err);
       });
-      this.fullscreenBtn.textContent = 'Exit Fullscreen';
+      DJVisualizerApp.setLabel(this.fullscreenBtn, 'Exit Fullscreen');
     } else {
       document.exitFullscreen();
-      this.fullscreenBtn.textContent = 'Fullscreen';
+      DJVisualizerApp.setLabel(this.fullscreenBtn, 'Fullscreen');
     }
   }
   

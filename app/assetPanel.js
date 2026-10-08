@@ -258,6 +258,18 @@ class AssetPanel {
       imp.title = 'Place in the Action Editor stack (1 = top, picked most)';
       imp.addEventListener('change', () => this.engine.setClipImportance(a.id, parseInt(imp.value, 10) || 1));
       if (!a.parent) clipG.appendChild(this.row('Importance', imp));
+      // Repeats (D-93): how many times it may appear; 0 = no limit.
+      const rep = document.createElement('input');
+      rep.type = 'number'; rep.id = 'propRepeats'; rep.min = 0; rep.step = 1; rep.value = a.repeats || 0;
+      rep.title = 'How many times this clip may appear on the timeline (0 = no limit)';
+      rep.addEventListener('change', () => this.engine.setRepeats(a.id, rep.value));
+      clipG.appendChild(this.row('Repeats', rep));
+      const used = this.engine.cutsOf(a);
+      const rn = document.createElement('p');
+      rn.className = 'hint';
+      rn.id = 'propRepeatsNote';
+      rn.textContent = a.repeats > 0 ? `On the timeline ${used} of ${a.repeats} time${a.repeats === 1 ? '' : 's'}${used > a.repeats ? ' — over its limit because every clip has used its repeats' : used === a.repeats ? ' — used up; it sits out from here' : ''}.` : `No limit · on the timeline ${used} time${used === 1 ? '' : 's'} so far.`;
+      clipG.appendChild(rn);
       P.appendChild(clipG);
     }
     if (a.kind === 'video' && !this.engine.isSplit(a)) P.appendChild(this.timingControls(a));
@@ -591,13 +603,20 @@ class AssetPanel {
 
   // ---- small DOM helpers -----------------------------------------------
 
+  // An options group: a fold-out row like 01 File's (Omar, 2026-10-08),
+  // open unless folded before (remembered by its title).
   group(title) {
-    const g = document.createElement('div');
-    g.className = 'prop-group';
-    const t = document.createElement('div');
-    t.className = 'prop-label';
-    t.textContent = title;
+    const ws = this.app.workspace;
+    const folds = ws ? (ws.state.groupFolds = ws.state.groupFolds || {}) : {};
+    const g = document.createElement('details');
+    g.className = 'prop-group prop-fold';
+    g.open = folds[title] !== false;
+    const t = document.createElement('summary');
+    t.className = 'prop-label prop-fold-head';
+    t.innerHTML = '<span></span><span class="menu-caret" aria-hidden="true">&#x25B8;</span>';
+    t.firstChild.textContent = title;
     g.appendChild(t);
+    g.addEventListener('toggle', () => { folds[title] = g.open; if (ws) ws.save(); });
     return g;
   }
 

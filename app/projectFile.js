@@ -217,7 +217,7 @@ class ProjectFile {
         assets.push({
           id: a.id, parent: a.parent, section: a.section, of: a.of, name: a.name, kind: a.kind,
           asClip: a.asClip, band: a.band, pace: a.pace, importance: a.importance, story: a.story, fade: { ...(a.fade || {}) },
-          used: { ...a.used }, speed: a.speed, fitBars: a.fitBars, visual: { ...(a.visual || VisualLayer.defaults()) },
+          used: { ...a.used }, speed: a.speed, fitBars: a.fitBars, visual: { ...(a.visual || VisualLayer.defaults()) }, repeats: a.repeats || 0,
         });
         continue;
       }
@@ -241,6 +241,7 @@ class ProjectFile {
         used: { ...(a.used || { start: 0, end: null }) }, speed: a.speed || 1, sections: (a.sections || []).slice(), fitBars: a.fitBars || null,
         show: a.show || 'full', placement: a.placement ? JSON.parse(JSON.stringify(a.placement)) : null,   // D-88
         visual: { ...(a.visual || VisualLayer.defaults()) },   // D-90
+        repeats: a.repeats || 0,   // D-93
       });
     }
     let voice = null;

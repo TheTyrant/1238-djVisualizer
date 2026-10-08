@@ -21,6 +21,10 @@ Built on branch `v2.4`. Installs beside the alpha with its own settings.
 - **Timeline selection:** drag on the ruler to select (snaps to beats; Shift extends, Esc clears), L loops it, and Export can export just the Selection, with optional edge fades.
 - **Scrubbing:** drag on the timeline to see what was recorded at any point. It no longer changes the cut list.
 - **Master fade in / out** (F on the Master lane): Linear, Smooth or Snap, in bars or seconds; heard live and in the export.
+- **Repeats:** set how many times a clip (image or video) may appear on the timeline; 0 = no limit.
+- **Ctrl+Space:** full screen with every editing shelf hidden; Esc or Ctrl+Space brings them back.
+- **Shelves** (02 Input, 03 Sound, 04 Effects, Auto-Editor) are laid out like 01 File: rows with fold-outs.
+- **One main drag** for the bottom shelf; each lane and the Action Editor have their own grip.
 - **Fixed tempo grid:** in track mode, cuts follow one grid from 0:00, the same every time the song loads — no more "Listening for tempo…". The header shows the tempo ("97 BPM · median"). Use ÷2, ×2, type a tempo, Tap (or **T**), Detected, or Live clock (the old behaviour).
 
 ### Changed

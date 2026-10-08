@@ -1324,11 +1324,14 @@ button.bin-dur.is-set { background: var(--ink); color: var(--paper); }
 
 /* ---- Workspace (v2.4 step 3) ------------------------------------------ */
 /* Timeline area scrolls when its lanes are taller than the room (D-84). */
-.editor-main { grid-template-rows: auto 7px minmax(0, 1fr); }
-.editor-main.has-bin-h { grid-template-rows: minmax(0, 1fr) 7px var(--bin-h); }
+/* One stack: the lanes, then the Action Editor, each with its own grip;
+   the editor (the one main drag) scrolls when they're taller (D-84). */
+.editor-main { grid-template-rows: auto minmax(120px, 1fr) 6px; overflow-y: auto; overflow-x: hidden; }
+.editor-main.has-bin-h { grid-template-rows: auto var(--bin-h) 6px; }
+.bin-grip { position: static; grid-column: 1 / -1; height: 6px; border-top: 1px solid var(--hair); }
 .tl-area {
   grid-column: 1 / -1; display: grid; grid-template-columns: 112px 1fr;
-  position: relative; min-height: 0; overflow-y: auto; overflow-x: hidden;
+  position: relative; min-height: 0; overflow: visible;
 }
 .lane-grips { position: absolute; left: 0; right: 0; top: 0; height: 0; z-index: 2; }
 .lane-grip { position: absolute; left: 0; right: 0; height: 6px; cursor: row-resize; }
@@ -1443,3 +1446,32 @@ button.bin-dur.is-set { background: var(--ink); color: var(--paper); }
 .fade-row { display: grid; grid-template-columns: 1fr 86px 56px 64px; gap: 6px; align-items: center; }
 .fade-row select, .fade-row input[type="number"] { height: 26px; min-width: 0; font-size: 11px; }
 #masterFadesBtn[aria-pressed="true"] { background: #ffd400; border-color: #ffd400; color: #111; }
+
+/* Shelves laid out like 01 File (Omar, 2026-10-08): menu rows, fold-outs */
+.menu-item.is-live { background: var(--live); color: #fff; }
+.menu-item.is-live kbd { color: inherit; opacity: 0.8; }
+.menu-check { padding: 0 8px; min-height: 32px; }
+.menu-check .prop-check { flex: 1; }
+.menu-sub-body > .prop + .prop, .menu-sub-body > .prop + .prop-readout, .menu-sub-body > .prop-readout + .prop { margin-top: 12px; }
+.menu-sub-body > .seg:first-child { margin-top: 6px; }
+.menu-list .ae-global { border-top: none; padding-top: 0; display: block; gap: 0; }
+.menu-list .ae-global > summary.menu-item { font: 600 12px var(--font-ui); text-transform: none; letter-spacing: 0; color: var(--ink); margin: 0; }
+.menu-list .ae-global > summary.menu-item::before { content: none; }
+.menu-list-cont { margin-top: 10px; }
+.menu-sub-body .asset-list { margin-top: 2px; }
+/* Options groups fold like 01 File's rows */
+details.prop-fold { display: block; }
+details.prop-fold > * + * { margin-top: 6px; }
+details.prop-fold > summary.prop-fold-head { display: flex; align-items: center; justify-content: space-between; cursor: pointer; list-style: none; }
+details.prop-fold > summary.prop-fold-head::-webkit-details-marker { display: none; }
+details.prop-fold[open] > summary .menu-caret { transform: rotate(90deg); }
+details.prop-fold > summary:hover { color: var(--ink); }
+details.prop-fold > summary.prop-fold-head { font: 600 12px var(--font-ui); text-transform: none; letter-spacing: 0; color: var(--ink); min-height: 28px; }
+details.prop-fold > summary.prop-fold-head .menu-caret { font-size: 10px; }
+
+/* Clean view (Ctrl+Space, D-94): only the picture; Esc brings it all back */
+body.clean-view .app-container { grid-template-rows: 0 minmax(0, 1fr) 0; grid-template-columns: 0 minmax(0, 1fr) 0; }
+body.clean-view .topbar, body.clean-view .sidebar, body.clean-view .bottom-area,
+body.clean-view .tab-rail, body.clean-view .status-overlay, body.clean-view .viewport-hud,
+body.clean-view .viewport-hint, body.clean-view .text-handle, body.clean-view .place-handle { display: none !important; }
+body.clean-view .main-content { grid-column: 1 / -1; grid-row: 1 / -1; }

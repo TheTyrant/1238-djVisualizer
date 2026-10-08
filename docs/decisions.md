@@ -520,7 +520,7 @@ The brief's four questions were not answered before the build. Rather than guess
 - *Proposed — needs Omar:* the colour is the clip's **assigned** band (its Band setting). It is not the band that happened to trigger a given cut; that one is shown in Band members (D-86).
 
 ### D-84 · Resizable lanes, remembered *(Accepted — built)*
-- **Decision** (brief #9): there are drag handles between the viewport and the editor, between the timeline and the Action Editor, and on each lane's lower edge (master, clips when expanded, voice, text). Double-click any handle to reset it.
+- **Decision** (brief #9, revised with Omar 2026-10-08): **one main drag** (viewport ↕ editor); every lane, and the Action Editor too, has its own grip on its lower edge (master, clips when expanded, voice, text, Action Editor). The bottom shelf scrolls when they are taller than the room. Double-click any handle to reset it.
 - The layout is one record of heights (`bssmnt.layout`: editor, Action Editor, lane heights, clip lane expanded, Global edit open). It lives in this build's own storage, so Stable05 and the alpha don't share it. The alpha's old editor height is read once.
 - The timeline area scrolls when its lanes are taller than the room. Lane headers follow the lane heights.
 
@@ -609,6 +609,27 @@ The brief's four questions were not answered before the build. Rather than guess
 - **Applied on the music bus after the analyser** (D-36: `musicGain`, so BPM, bands and cuts still hear the full track) and in the export mixdown, both through `musicLevelAt(t)` = story fades × master fades.
 - The ramps are drawn over the Master lane in yellow.
 - Tested: Smooth 1-bar in + Linear 2 s out give levels 0 / 0.5 / 1 … 0.5 / 0 at the expected times, and the live music bus follows.
+
+
+### D-93 · Repeats: how many times a clip may appear *(Accepted — built; Omar, 2026-10-08)*
+- **Decision:** every clip and section, images and videos alike, has **Repeats** (Asset timing → Clip): 0 = no limit, N = at most N cuts on the timeline. The card shows ×N, and a note says how many times it's on the timeline.
+- **Counting:** a cut is one appearance. While picking, cuts the fast pass filled ahead of the playhead don't count, because playing replaces them. Locked (Hook / Result / CTA) blocks don't count.
+- *Proposed — needs Omar:* when **every** clip has used its repeats, they all play again rather than leaving the screen empty; the note says when that happens. The alternative is to hold the last clip.
+- Tested (`tests/shelves.js`): set to 2 and 3 on a 30 s song, those images appear exactly 2 and 3 times; the unlimited clip fills the rest; saved with the project.
+
+### D-94 · Ctrl+Space: clean full screen *(Accepted — built; Omar, 2026-10-08)*
+- **Ctrl+Space** hides every editing shelf (header, sidebars and tabs, timeline, Status overlay, handles) and asks the window to go full screen, so only the picture shows. **Esc** or **Ctrl+Space** again brings the shelves back, and leaving full screen any other way does too. Playback isn't touched. **F** still toggles plain full screen.
+
+### D-95 · Shelves laid out like 01 File *(Accepted — built; Omar, 2026-10-08)*
+- **Decision:** 02 Input, 03 Sound, 04 Effects and the Auto-Editor (right shelf) use 01 File's presentation:
+  - a menu list of rows, with the shortcut or a short note on the right;
+  - anything with options folds out under its row (caret), like Export video.
+- **02 Input:** Source · Start / Pause (Space) · Fullscreen (F) · Visual mode · Voice.
+- **03 Sound:** EQ · Assets · Asset timing.
+- **04 Effects:** Add title / credits / text · Items · Options.
+- **Auto-Editor:** Band members · Global edit · Overlay Media Layers · Positions.
+- The option groups inside (Use as, Clip, Timing, Visual, Status, Look …) fold the same way.
+- Fold-outs start open; folding one is remembered (layout record, D-84). Every control keeps its id.
 
 ## I. Known carry-overs (pre-existing on `main`, not changed)
 - Placeholder text drawn with `p.text()` in WebGL mode doesn't render, because no font is loaded (affects the Media Layers "Upload images…" prompt). v2 uses a DOM overlay for its own hints.
