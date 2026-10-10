@@ -8,10 +8,14 @@
 //
 // Sections: a filmstrip of the clip over a bar ruler. Bar lines are the
 // fixed tempo grid's bar (D-81) at the clip's speed, in source seconds.
-// Click to add a marker on the nearest bar line, drag one to move it (it
-// snaps to bars), right-click to delete. Each section becomes its own clip
-// card ("A · 2/4") sharing the same video.
+// Slice every ½ / 1 / 4 / 8 / 16 bars cuts the used part on that grid;
+// click adds a marker, drag moves it (it snaps), × / right-click / Delete
+// removes it, ←/→ nudges the selected one, Ctrl+Z undoes. Each section
+// shows on the clip's card strip ("A · 2/4") and shares the same video.
 class ClipTools {
+  static DIVISIONS = [0.5, 1, 4, 8, 16];   // Slice every … bars
+  static MAX_SECTIONS = 64;
+
   constructor(app) {
     this.app = app;
     this.engine = app.clipEngine;
@@ -23,6 +27,7 @@ class ClipTools {
       if (this.pop && !this.pop.hidden && !this.pop.contains(e.target) && !(this.anchor && this.anchor.contains(e.target))) this.closeRange();
     });
     document.addEventListener('keydown', (e) => {
+      if (this.sect && e.key !== 'Escape' && this.sectionKey(e)) { e.preventDefault(); e.stopPropagation(); return; }
       if (e.key !== 'Escape') return;
       if (this.sect) { e.preventDefault(); e.stopPropagation(); this.closeSections(); }
       else if (this.pop && !this.pop.hidden) { e.preventDefault(); e.stopPropagation(); this.closeRange(); }
@@ -151,20 +156,28 @@ class ClipTools {
           <h3>Sections <span class="sect-name"></span></h3>
           <span class="sect-bar" id="sectBar"></span>
         </div>
+        <div class="sect-slice" role="group" aria-label="Slice every">
+          <span class="sect-slice-label">Slice every</span>
+          ${ClipTools.DIVISIONS.map(d => `<button type="button" class="btn sect-div" data-bars="${d}">${d === 0.5 ? '1/2' : d} bar${d > 1 ? 's' : ''}</button>`).join('')}
+          <span class="sect-msg" id="sectMsg" role="status"></span>
+        </div>
         <canvas class="sect-canvas" id="sectCanvas" width="960" height="150" aria-label="Clip filmstrip with bar ruler"></canvas>
-        <p class="hint">Click to add a marker on a bar line · drag a marker to move it (it snaps to bars) · right-click a marker to delete it. Each section shows on the clip's card and gets its own pace, band and speed.</p>
+        <p class="hint">Slice every … cuts the whole clip (or its used part) on that grid. Click to add a marker · drag to move it (it snaps to the grid) · hover and click × or right-click to delete · click a marker, then Delete removes it and ←/→ moves it one step · Ctrl+Z undoes. Each section shows on the clip's card and gets its own pace, band and speed.</p>
         <ol class="sect-list" id="sectList"></ol>
         <div class="sect-foot">
+          <button type="button" class="btn" id="sectUndo" disabled>Undo</button>
           <button type="button" class="btn" id="sectClear">Clear sections</button>
           <button type="button" class="btn btn-primary" id="sectDone">Done</button>
         </div>
       </div>`;
     document.body.appendChild(ov);
     ov.querySelector('.sect-name').textContent = p.name;
-    this.sect = { p, ov, canvas: ov.querySelector('#sectCanvas'), drag: null };
+    this.sect = { p, ov, canvas: ov.querySelector('#sectCanvas'), drag: null, sel: -1, hover: -1, step: 1, undo: [] };
     ov.addEventListener('pointerdown', (e) => { if (e.target === ov) this.closeSections(); });
     ov.querySelector('#sectDone').addEventListener('click', () => this.closeSections());
-    ov.querySelector('#sectClear').addEventListener('click', () => this.engine.setSections(p.id, []));
+    ov.querySelector('#sectClear').addEventListener('click', () => this.applySections([]));
+    ov.querySelector('#sectUndo').addEventListener('click', () => this.undoSections());
+    ov.querySelectorAll('.sect-div').forEach(b => b.addEventListener('click', () => this.autoSlice(+b.dataset.bars)));
     this.wireCanvas();
     this.drawSections();
     this.filmstrip(p).then(() => this.drawSections());
@@ -182,41 +195,166 @@ class ClipTools {
     return { c, dur, pad, w, x: (t) => pad + (t / dur) * w, t: (x) => ((x - pad) / w) * dur, stripY: 8, stripH: 90, rulerY: 104 };
   }
 
+  // The grid starts at the start of the clip's used part, so slices, the
+  // ruler and snapping all line up with where the clip begins playing.
+  gridStart() { return this.engine.usedRange(this.sect.p).start; }
+  stepSource() { return this.barSource(this.sect.p) * this.sect.step; }
+
   snap(t) {
-    const g = this.geom(), bar = this.barSource(this.sect.p);
-    return Math.max(0, Math.min(g.dur, Math.round(t / bar) * bar));
+    const g = this.geom(), st = this.stepSource(), o = this.gridStart();
+    return Math.max(0, Math.min(g.dur, o + Math.round((t - o) / st) * st));
+  }
+
+  // ---- edits (each one can be undone) ---------------------------------
+
+  snapshot() {
+    const p = this.sect.p;
+    return { sections: p.sections.slice(), asClip: this.engine.sectionsOf(p).map(c => c.asClip) };
+  }
+
+  applySections(times, asClip = null) {
+    const s = this.sect, e = this.engine;
+    s.undo.push(this.snapshot());
+    if (s.undo.length > 50) s.undo.shift();
+    s.sel = -1; s.hover = -1;
+    e.setSections(s.p.id, times);
+    if (asClip) {
+      e.sectionsOf(s.p).forEach((c, k) => { if (k < asClip.length) c.asClip = asClip[k]; });
+      e.renumber();
+      e.emit('clips');
+    }
+  }
+
+  undoSections() {
+    const s = this.sect;
+    if (!s || !s.undo.length) return;
+    const snap = s.undo.pop(), e = this.engine;
+    s.sel = -1; s.hover = -1;
+    e.setSections(s.p.id, snap.sections);
+    e.sectionsOf(s.p).forEach((c, k) => { if (k < snap.asClip.length) c.asClip = snap.asClip[k]; });
+    e.renumber();
+    e.emit('clips');
+    this.say('Undone.');
+  }
+
+  // Slice every n bars (½, 1, 4, 8, 16) across the used part. Replaces the
+  // markers already there (Undo brings them back). Parts outside the used
+  // range become sections of their own, set to not be used.
+  autoSlice(bars) {
+    const s = this.sect, e = this.engine, g = this.geom();
+    const st = this.barSource(s.p) * bars, u = e.usedRange(s.p);
+    if (!(st > 0) || !(u.end > u.start)) return;
+    const cuts = [];
+    for (let k = 1; u.start + k * st < u.end - 0.05; k++) cuts.push(u.start + k * st);
+    const inner = cuts.length + 1;
+    const name = `${bars === 0.5 ? '1/2' : bars} bar${bars > 1 ? 's' : ''}`;
+    if (!cuts.length) { this.say(`The ${u.start > 0.05 || u.end < g.dur - 0.05 ? 'used part' : 'clip'} is ${(+((u.end - u.start) / this.barSource(s.p)).toFixed(2))} bars long, too short to cut every ${name}.`, true); return; }
+    const pts = [...(u.start > 0.05 ? [u.start] : []), ...cuts, ...(u.end < g.dur - 0.05 ? [u.end] : [])];
+    if (pts.length + 1 > ClipTools.MAX_SECTIONS) {
+      this.say(`Every ${name} would make ${pts.length + 1} sections; ${ClipTools.MAX_SECTIONS} is the most. Pick a longer division.`, true);
+      return;
+    }
+    s.step = bars < 1 ? 0.5 : 1;
+    const asClip = [...(u.start > 0.05 ? [false] : []), ...new Array(inner).fill(true), ...(u.end < g.dur - 0.05 ? [false] : [])];
+    this.applySections(pts, asClip);
+    this.say(`Sliced into ${inner} sections of ${name}${asClip.includes(false) ? ' (the parts outside the used range are kept but not used)' : ''}.`);
+  }
+
+  removeMarker(i) {
+    const s = this.sect;
+    if (i < 0 || i >= s.p.sections.length) return;
+    this.applySections(s.p.sections.filter((_, k) => k !== i));
+  }
+
+  moveMarker(i, t) {
+    const s = this.sect, list = s.p.sections.slice();
+    if (i < 0 || i >= list.length || Math.abs(list[i] - t) < 0.001) return;
+    list[i] = t;
+    this.applySections(list);
+    // keep the moved marker selected (its index after sorting)
+    s.sel = s.p.sections.findIndex(v => Math.abs(v - +t.toFixed(3)) < 0.002);
+    this.drawSections();
+  }
+
+  say(text, warn = false) {
+    const m = this.sect && this.sect.ov.querySelector('#sectMsg');
+    if (!m) return;
+    m.textContent = text;
+    m.classList.toggle('is-warn', warn);
+  }
+
+  // Keys while the editor is open: Delete / Backspace, ← / →, Ctrl+Z.
+  sectionKey(e) {
+    const s = this.sect;
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { this.undoSections(); return true; }
+    if (s.sel < 0) return false;
+    if (e.key === 'Delete' || e.key === 'Backspace') { this.removeMarker(s.sel); return true; }
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      const t = this.snap(s.p.sections[s.sel] + (e.key === 'ArrowLeft' ? -1 : 1) * this.stepSource());
+      const g = this.geom();
+      if (t > 0.05 && t < g.dur - 0.05 && !s.p.sections.some((v, k) => k !== s.sel && Math.abs(v - t) < 0.01)) this.moveMarker(s.sel, t);
+      return true;
+    }
+    return false;
   }
 
   wireCanvas() {
     const s = this.sect, c = s.canvas;
-    const posOf = (e) => { const r = c.getBoundingClientRect(); return (e.clientX - r.left) * (c.width / r.width); };
+    const pos = (e) => { const r = c.getBoundingClientRect(); return { x: (e.clientX - r.left) * (c.width / r.width), y: (e.clientY - r.top) * (c.height / r.height) }; };
     const near = (x) => { const g = this.geom(); return s.p.sections.findIndex(t => Math.abs(g.x(t) - x) < 7); };
+    // the × shown on a hovered or selected marker
+    const onX = (pt) => { const i = s.hover >= 0 ? s.hover : s.sel; if (i < 0) return -1; const b = this.xBox(i); return b && Math.abs(pt.x - b.x) <= 8 && Math.abs(pt.y - b.y) <= 8 ? i : -1; };
     c.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      const i = near(posOf(e));
-      if (i >= 0) this.engine.setSections(s.p.id, s.p.sections.filter((_, k) => k !== i));
+      const i = near(pos(e).x);
+      if (i >= 0) this.removeMarker(i);
     });
     c.addEventListener('pointerdown', (e) => {
       if (e.button !== 0) return;
-      const x = posOf(e), i = near(x), g = this.geom();
-      if (i >= 0) { s.drag = { i, t: s.p.sections[i] }; c.setPointerCapture(e.pointerId); return; }
-      const t = this.snap(g.t(x));
-      if (t > 0.05 && t < g.dur - 0.05 && !s.p.sections.some(v => Math.abs(v - t) < 0.01)) this.engine.setSections(s.p.id, [...s.p.sections, t]);
+      const pt = pos(e), xi = onX(pt);
+      if (xi >= 0) { this.removeMarker(xi); this.drawSections(); return; }
+      const i = near(pt.x), g = this.geom();
+      if (i >= 0) { s.sel = i; s.drag = { i, t: s.p.sections[i], moved: false }; c.setPointerCapture(e.pointerId); this.drawSections(); return; }
+      const t = this.snap(g.t(pt.x));
+      if (t > 0.05 && t < g.dur - 0.05 && !s.p.sections.some(v => Math.abs(v - t) < 0.01)) {
+        this.applySections([...s.p.sections, t]);
+        s.sel = s.p.sections.findIndex(v => Math.abs(v - +t.toFixed(3)) < 0.002);
+        this.drawSections();
+      } else if (s.sel >= 0) { s.sel = -1; this.drawSections(); }
     });
     c.addEventListener('pointermove', (e) => {
-      if (!s.drag) { c.style.cursor = near(posOf(e)) >= 0 ? 'ew-resize' : 'copy'; return; }
-      s.drag.t = this.snap(this.geom().t(posOf(e)));
+      const pt = pos(e);
+      if (!s.drag) {
+        const h = near(pt.x);
+        const was = s.hover;
+        s.hover = h >= 0 ? h : (onX(pt) >= 0 ? s.hover : -1);
+        c.style.cursor = onX(pt) >= 0 ? 'pointer' : h >= 0 ? 'ew-resize' : 'copy';
+        if (was !== s.hover) this.drawSections();
+        return;
+      }
+      const t = this.snap(this.geom().t(pt.x));
+      if (Math.abs(t - s.drag.t) > 0.001) s.drag.moved = true;
+      s.drag.t = t;
       this.drawSections();
     });
+    c.addEventListener('pointerleave', () => { if (!s.drag && s.hover >= 0) { s.hover = -1; this.drawSections(); } });
     const end = () => {
       if (!s.drag) return;
-      const list = s.p.sections.slice();
-      list[s.drag.i] = s.drag.t;
+      const d = s.drag;
       s.drag = null;
-      this.engine.setSections(s.p.id, list);
+      if (d.moved) this.moveMarker(d.i, d.t);
+      this.drawSections();
     };
     c.addEventListener('pointerup', end);
     c.addEventListener('pointercancel', end);
+  }
+
+  // Where marker i's × sits (canvas px), at the bottom of the filmstrip.
+  xBox(i) {
+    const t = this.sect.p.sections[i];
+    if (t == null) return null;
+    const g = this.geom();
+    return { x: Math.round(g.x(t)), y: g.stripY + g.stripH - 11 };
   }
 
   drawSections() {
@@ -234,52 +372,89 @@ class ClipTools {
       const n = strip.frames.length, cw = g.w / n;
       strip.frames.forEach((f, i) => { if (f) ctx.drawImage(f, g.pad + i * cw, g.stripY, cw, g.stripH); });
     }
-    // bar ruler (source seconds per bar at the clip's speed)
-    const bar = this.barSource(s.p);
+    // sections set to not be used are shaded
+    const kids = this.engine.sectionsOf(s.p);
+    kids.forEach(c => {
+      if (c.asClip) return;
+      const b = this.engine.sectionBounds(c);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(g.x(b.start), g.stripY, g.x(b.end) - g.x(b.start), g.stripH);
+    });
+    // bar ruler (source seconds per bar at the clip's speed), from the start
+    // of the used part; half-bar ticks when slicing in halves
+    const bar = this.barSource(s.p), o = this.gridStart();
     ctx.fillStyle = paper; ctx.fillRect(g.pad, g.rulerY, g.w, 34);
     ctx.strokeStyle = ink; ctx.lineWidth = 1; ctx.strokeRect(g.pad + 0.5, g.rulerY + 0.5, g.w - 1, 33);
     ctx.font = '10px "JetBrains Mono", monospace';
     const pxBar = (bar / g.dur) * g.w;
     const every = pxBar < 14 ? Math.ceil(14 / pxBar) : 1;
-    for (let k = 0; k * bar <= g.dur + 1e-6; k++) {
-      const x = Math.round(g.x(k * bar)) + 0.5;
+    const k0 = -Math.floor(o / bar);
+    for (let k = k0; o + k * bar <= g.dur + 1e-6; k++) {
+      const x = Math.round(g.x(o + k * bar)) + 0.5;
       const major = k % every === 0;
       ctx.strokeStyle = major ? ink : ink3;
       ctx.beginPath(); ctx.moveTo(x, g.rulerY); ctx.lineTo(x, g.rulerY + (major ? 14 : 7)); ctx.stroke();
-      if (major && pxBar * every > 22) { ctx.fillStyle = ink; ctx.fillText(String(k + 1), x + 3, g.rulerY + 26); }
+      if (major && k >= 0 && pxBar * every > 22) { ctx.fillStyle = ink; ctx.fillText(String(k + 1), x + 3, g.rulerY + 26); }
+      if (s.step < 1 && pxBar > 10) {
+        const xh = Math.round(g.x(o + (k + 0.5) * bar)) + 0.5;
+        if (xh < g.pad + g.w) { ctx.strokeStyle = ink3; ctx.beginPath(); ctx.moveTo(xh, g.rulerY); ctx.lineTo(xh, g.rulerY + 5); ctx.stroke(); }
+      }
     }
-    // markers
+    // markers (the selected one is drawn thicker, in ink)
     const marks = s.p.sections.slice();
     if (s.drag) marks[s.drag.i] = s.drag.t;
-    marks.forEach((t) => {
-      const x = Math.round(g.x(t)) + 0.5;
-      ctx.strokeStyle = high; ctx.lineWidth = 2;
+    marks.forEach((t, i) => {
+      const x = Math.round(g.x(t)) + 0.5, sel = i === s.sel;
+      ctx.strokeStyle = sel ? ink : high; ctx.lineWidth = sel ? 3 : 2;
       ctx.beginPath(); ctx.moveTo(x, g.stripY - 4); ctx.lineTo(x, g.rulerY + 34); ctx.stroke();
-      ctx.fillStyle = high;
+      ctx.fillStyle = sel ? ink : high;
       ctx.beginPath(); ctx.moveTo(x - 6, g.stripY - 6); ctx.lineTo(x + 6, g.stripY - 6); ctx.lineTo(x, g.stripY + 2); ctx.closePath(); ctx.fill();
     });
     ctx.lineWidth = 1;
-    // section labels on the strip
+    // section labels on the strip (skipped when they would overlap)
     const pts = [0, ...marks.slice().sort((a, b) => a - b), g.dur];
     if (pts.length > 2) {
       ctx.font = '700 11px "JetBrains Mono", monospace';
       for (let k = 0; k < pts.length - 1; k++) {
-        const x = g.x(pts[k]) + 5;
-        ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(x - 3, g.stripY + 4, 40, 16);
-        ctx.fillStyle = '#fff'; ctx.fillText(`${k + 1}/${pts.length - 1}`, x, g.stripY + 16);
+        const x = g.x(pts[k]) + 5, label = `${k + 1}/${pts.length - 1}`, lw = ctx.measureText(label).width + 6;
+        if (g.x(pts[k + 1]) - g.x(pts[k]) < lw + 6) continue;
+        ctx.fillStyle = 'rgba(0,0,0,0.65)'; ctx.fillRect(x - 3, g.stripY + 4, lw, 16);
+        ctx.fillStyle = '#fff'; ctx.fillText(label, x, g.stripY + 16);
       }
+    }
+    // the × on the hovered (or selected) marker
+    const xi = !s.drag ? (s.hover >= 0 ? s.hover : s.sel) : -1;
+    const b = xi >= 0 && this.xBox(xi);
+    if (b) {
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#000';
+      ctx.beginPath(); ctx.arc(b.x, b.y, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(b.x - 3.5, b.y - 3.5); ctx.lineTo(b.x + 3.5, b.y + 3.5); ctx.moveTo(b.x + 3.5, b.y - 3.5); ctx.lineTo(b.x - 3.5, b.y + 3.5); ctx.stroke();
+      ctx.lineWidth = 1;
     }
     // readouts
     const barS = this.barSeconds();
     const head = s.ov.querySelector('#sectBar');
     head.textContent = `1 bar = ${barS.toFixed(2)} s on screen = ${bar.toFixed(2)} s of the clip at ${ClipTools.speedLabel(this.engine.speedOf(s.p))}`;
+    s.ov.querySelector('#sectUndo').disabled = !s.undo.length;
     const list = s.ov.querySelector('#sectList');
     list.textContent = '';
-    this.engine.sectionsOf(s.p).forEach(c => {
-      const b = this.engine.sectionBounds(c);
+    kids.forEach((c, k) => {
+      const bb = this.engine.sectionBounds(c);
       const li = document.createElement('li');
-      const bars = +((b.end - b.start) / bar).toFixed(2);
-      li.textContent = `${c.name} · ${fmtTime(b.start, true)}–${fmtTime(b.end, true)} · ${bars} bar${bars === 1 ? '' : 's'}`;
+      const bars = +((bb.end - bb.start) / bar).toFixed(2);
+      const txt = document.createElement('span');
+      txt.textContent = `${c.name} · ${fmtTime(bb.start, true)}–${fmtTime(bb.end, true)} · ${bars} bar${bars === 1 ? '' : 's'}${c.asClip ? '' : ' · not used'}`;
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'sect-x';
+      x.textContent = '×';
+      // Removing a section removes the cut at its start (the first one: at its end).
+      const mi = k > 0 ? k - 1 : 0;
+      x.title = k > 0 ? 'Remove the cut before this section (joins it to the one before)' : 'Remove the cut after this section (joins it to the next)';
+      x.setAttribute('aria-label', `Remove ${c.name}`);
+      x.addEventListener('click', () => this.removeMarker(mi));
+      li.append(txt, x);
       list.appendChild(li);
     });
     if (!list.children.length) {

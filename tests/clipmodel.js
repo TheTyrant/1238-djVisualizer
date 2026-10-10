@@ -225,6 +225,71 @@ const s3 = await E(() => djApp.clipEngine.mediaAssets[0].sections.slice());
 await E(() => djApp.clipTools.closeSections());
 ok('Sections editor: click adds on a bar line, drag snaps to bars, right-click deletes', geo.bar === 2 && s1.join() === '6' && s2.join() === '8' && cards2.length === 2 && s3.length === 0, `bar ${geo.bar} s · click → ${s1} · drag → ${s2} (${cards2.join(', ')}) · right-click → [${s3}]`);
 
+// 5b) Slice every ½ / 1 / 4 / 8 / 16 bars (Omar, 2026-10-10): auto-cut on
+// the grid, replaceable, undoable, and markers removable without hunting.
+const sl = await E(async () => {
+  const e = djApp.clipEngine, p = e.mediaAssets[0], T = djApp.clipTools;
+  const wait = () => new Promise(r => setTimeout(r, 60));
+  e.setSpeed(p.id, 1); e.setUsed(p.id, 0, null); e.setSections(p.id, [30]);
+  T.openSections(p);
+  const btn = (b) => document.querySelector(`.sect-div[data-bars="${b}"]`);
+  const out = { labels: [...document.querySelectorAll('.sect-div')].map(b => b.textContent) };
+  btn(4).click(); await wait();
+  out.four = p.sections.slice(); out.fourCards = e.sectionsOf(p).length;
+  btn(0.5).click(); await wait();
+  out.half = p.sections.length;
+  document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true })); await wait();
+  out.undo1 = p.sections.slice();
+  document.getElementById('sectUndo').click(); await wait();
+  out.undo2 = p.sections.slice();
+  // Used part 0:03–0:27, every 8 bars (16 s): 3 | 19 | 27, outside parts kept but not used.
+  e.setUsed(p.id, 3, 27); btn(8).click(); await wait();
+  out.used = p.sections.slice(); out.usedAs = e.sectionsOf(p).map(c => c.asClip);
+  out.msg = document.getElementById('sectMsg').textContent;
+  // The cap: at 0.25× one bar is 0.5 s of the clip, ½ bar = 0.25 s → 160 sections.
+  e.setUsed(p.id, 0, null); e.setSpeed(p.id, 0.25);
+  const before = p.sections.slice();
+  btn(0.5).click(); await wait();
+  out.capKept = p.sections.join() === before.join();
+  out.capMsg = document.getElementById('sectMsg').classList.contains('is-warn');
+  e.setSpeed(p.id, 1);
+  // Too short: a 10 s used part can't be cut every 8 bars (16 s).
+  e.setUsed(p.id, 0, 10); const b2 = p.sections.slice(); btn(8).click(); await wait();
+  out.short = p.sections.join() === b2.join() && /too short/.test(document.getElementById('sectMsg').textContent);
+  e.setUsed(p.id, 0, null);
+  btn(4).click(); await wait();
+  // × in the list on section 3 removes the cut before it (16 s).
+  document.querySelectorAll('#sectList .sect-x')[2].click(); await wait();
+  out.listX = p.sections.slice();
+  return out;
+});
+ok('Slice every: 1/2, 1, 4, 8, 16 bars; 4 bars on a 40 s clip = cuts every 8 s (5 sections), replacing the old marker', sl.labels.join('|') === '1/2 bar|1 bar|4 bars|8 bars|16 bars' && sl.four.join() === '8,16,24,32' && sl.fourCards === 5, JSON.stringify(sl));
+ok('1/2 bar makes 40 sections; Ctrl+Z and Undo step back (4 bars, then the hand-placed marker)', sl.half === 39 && sl.undo1.join() === '8,16,24,32' && sl.undo2.join() === '30', JSON.stringify([sl.half, sl.undo1, sl.undo2]));
+ok('inside the used part (0:03–0:27): cut at 3, 19, 27; the parts outside are kept but not used', sl.used.join() === '3,19,27' && sl.usedAs.join() === 'false,true,true,false' && /not used/.test(sl.msg), JSON.stringify([sl.used, sl.usedAs]));
+ok('more than 64 sections is refused with a message; markers untouched', sl.capKept && sl.capMsg);
+ok('a used part shorter than the division says so and cuts nothing', sl.short);
+ok('× on a section in the list removes the cut before it', sl.listX.join() === '8,24,32', sl.listX.join());
+
+// Select a marker by mouse, nudge it with →, delete it with Delete; the ×
+// on a hovered marker deletes too.
+const g5 = await E(() => {
+  const c = document.getElementById('sectCanvas'), r = c.getBoundingClientRect(), g = djApp.clipTools.geom();
+  const toX = (t) => r.left + (g.x(t) / c.width) * r.width;
+  const toY = (y) => r.top + (y / c.height) * r.height;
+  return { x8: toX(8), y: toY(40) };
+});
+await page.mouse.click(g5.x8, g5.y); await sleep(150);
+await page.keyboard.press('ArrowRight'); await sleep(150);
+const k1 = await E(() => djApp.clipEngine.mediaAssets[0].sections.slice());
+await page.keyboard.press('Delete'); await sleep(150);
+const k2 = await E(() => djApp.clipEngine.mediaAssets[0].sections.slice());
+// (the list is shorter now, so the dialog has re-centred: measure again)
+const g6 = await E(() => { const c = document.getElementById('sectCanvas'), r = c.getBoundingClientRect(), g = djApp.clipTools.geom(); return { x: r.left + (g.x(24) / c.width) * r.width, y: r.top + (40 / c.height) * r.height, yX: r.top + ((g.stripY + g.stripH - 11) / c.height) * r.height }; });
+await page.mouse.move(g6.x, g6.y); await sleep(100); await page.mouse.move(g6.x, g6.yX); await sleep(100);
+await page.mouse.click(g6.x, g6.yX); await sleep(150);
+const k3 = await E(() => { const s = djApp.clipEngine.mediaAssets[0].sections.slice(); djApp.clipTools.closeSections(); djApp.clipEngine.setSections(djApp.clipEngine.mediaAssets[0].id, []); return s; });
+ok('click a marker to select it: → moves it one bar, Delete removes it; the × on a hovered marker removes it', k1.join() === '10,24,32' && k2.join() === '24,32' && k3.join() === '32', JSON.stringify([k1, k2, k3]));
+
 // 6) Live: two sections of one video blend with the band transitions
 // (each section has its own player on the same file).
 const blend = await E(async () => {

@@ -646,6 +646,15 @@ The brief's four questions were not answered before the build. Rather than guess
 - Saved with the project. A new track starts at full length.
 - Tested (`tests/tracklength.js`): 1:00 → 0:40 makes the cuts, the CTA, the credits and the export all end at 0:40; it can't go under 30 s; playback stops at the end.
 
+### D-98 · Slice every n bars in the Sections editor *(Accepted — built; Omar, 2026-10-10)*
+- **Decision:** buttons **Slice every 1/2 · 1 · 4 · 8 · 16 bars** cut the clip on that grid, like FL Studio's Slicex / Fruity Slicer auto-slice. The bar is the fixed tempo grid's bar at the clip's speed, the same one the ruler shows.
+- **Replaces** the markers already there; **Undo** (button or Ctrl+Z, 50 steps while the editor is open) brings them back.
+- **Used part:** the slices run across the clip's used range. When it is narrower than the clip, the parts before and after become sections set to *not used* (shaded), so the cards keep the same video and nothing outside the range plays. The ruler, the slices and hand snapping all start at the used part's start.
+- **At most 64 sections:** a division that would go over is refused with a message, and the markers are left alone. A clip (or used part) shorter than the division gets a message too, and nothing is cut.
+- **Removing and moving points:** hover a marker for a × (or right-click); click a marker to select it, then Delete removes it and ←/→ moves it one step (1/2 bar after a 1/2-bar slice, else 1 bar); each section in the list has an × that removes the cut at its start (the first one: at its end). Drag still moves a marker.
+- The dialog sits near the top of the window so it doesn't move as the list grows or shrinks.
+- Tested (`tests/clipmodel.js` §5b).
+
 ## I. Known carry-overs (pre-existing on `main`, not changed)
 - Placeholder text drawn with `p.text()` in WebGL mode doesn't render, because no font is loaded (affects the Media Layers "Upload images…" prompt). v2 uses a DOM overlay for its own hints.
 - `visualizer.js` has duplicate `drawAudioWaves` / `drawMandala` / `drawTunnel` definitions (the later ones win), plus unused snake-game code.

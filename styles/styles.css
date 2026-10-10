@@ -1306,9 +1306,9 @@ button.bin-dur.is-set { background: var(--ink); color: var(--paper); }
 .range2 input[type="range"]:focus-visible { outline: 2px solid var(--high); outline-offset: 2px; }
 
 /* Sections editor */
-.sect-overlay { position: fixed; inset: 0; z-index: 950; display: flex; align-items: center; justify-content: center; background: var(--surface-glass-2); }
+.sect-overlay { position: fixed; inset: 0; z-index: 950; display: flex; align-items: flex-start; justify-content: center; padding-top: 8vh; background: var(--surface-glass-2); }  /* top-anchored: the panel does not jump as the list changes */
 .sect-panel {
-  width: min(1010px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto;
+  width: min(1010px, calc(100vw - 32px)); max-height: calc(92vh - 16px); overflow: auto;
   display: flex; flex-direction: column; gap: 10px; padding: 18px 22px;
   background: var(--paper); color: var(--ink); border: 2px solid var(--line); box-shadow: 8px 8px 0 var(--ink);
 }
@@ -1320,6 +1320,15 @@ button.bin-dur.is-set { background: var(--ink); color: var(--paper); }
 .sect-list { margin: 0; padding: 0 0 0 18px; font-family: var(--font-mono); font-size: 11px; line-height: 1.7; }
 .sect-list .hint { list-style: none; margin-left: -18px; }
 .sect-foot { display: flex; justify-content: flex-end; gap: 8px; }
+.sect-slice { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sect-slice-label { font: 600 12px var(--font-ui); margin-right: 2px; }
+.sect-slice .btn { height: 26px; padding: 0 10px; font-family: var(--font-mono); font-size: 11px; }
+.sect-msg { font-family: var(--font-mono); font-size: 10px; color: var(--ink-2); margin-left: 6px; }
+.sect-msg.is-warn { color: var(--high); }
+.sect-list { max-height: 160px; overflow-y: auto; }
+.sect-list li span { margin-right: 6px; }
+.sect-x { width: 18px; height: 18px; padding: 0; line-height: 16px; border: 1px solid var(--hair); background: transparent; color: var(--ink-2); font: 600 12px var(--font-ui); cursor: pointer; vertical-align: middle; }
+.sect-x:hover { background: var(--steel); color: var(--ink); }
 .sect-foot .btn { height: 30px; padding: 0 16px; }
 
 /* ---- Workspace (v2.4 step 3) ------------------------------------------ */

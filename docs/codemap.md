@@ -31,7 +31,7 @@ app/
   tempoGrid.js             Fixed tempo grid { bpm, offset, source } for track mode (D-81)
   fastPass.js              Fast pass: whole-song offline analysis through the frozen AudioProcessor; fills record + cut list (D-80)
   tempoPanel.js            Header TEMPO readout/menu + fast-pass progress row in the Status overlay (D-80, D-81)
-  clipTools.js             Amount-used range popover + Sections editor (filmstrip over a bar ruler) (D-82)
+  clipTools.js             Amount-used range popover + Sections editor (filmstrip over a bar ruler; Slice every n bars, ×/Delete/arrows, undo) (D-82, D-98)
   visualLayer.js           Per-clip visual mode: transparent WebGL / 2D layer, None / Trail / Solid, tint (D-90)
   placement.js             Placement model + box maths + draw (anchor, offset, size, rotation, opacity, fit, blend, react, breakpoints) (D-87)
   placeHandle.js           Viewport drag handle for a layer / Over image placement (D-87)
@@ -62,7 +62,7 @@ tests/
   titles.js                Step 4c: CTA-locked title follows the CTA, screen lock, 9:16 safe areas, presets export as drawn
   placement.js             Step 4: layers pixel-identical to the alpha, over stream, locked Over, 16:9 / 9:16 drag, export
   fixtures/legacy-layers.js  The alpha's Media Layer drawing, verbatim (reference for placement.js)
-  clipmodel.js             Step 2: amount used, sections, speed, Fit to bars, export frames + pitch, save/reopen, Sections editor by mouse
+  clipmodel.js             Step 2: amount used, sections, speed, Fit to bars, export frames + pitch, save/reopen, Sections editor by mouse, Slice every n bars / undo / cap / × / keys
 test-assets/
   generate.html            Makes labelled test clips (WebM) + a 120 BPM test track (WAV) in-browser
 docs/
@@ -337,6 +337,7 @@ Tokens in `:root`: `--surface #EDEAE4 · --panel #E3DFD7 · --steel #D7DADC · -
 | `ClipEngine.rate(el, sp)` / `keepInRange()` | Live playback rate (pitch follows) and looping inside the used part |
 | Segments | `speed`, `range` recorded per cut; `OfflineRenderer.clipTime()` = in + elapsed × speed, wrapped in `range`; story sound resampled in `mixChunk` (`rate`) |
 | `ClipTools.openRange(a, anchor)` / `openSections(a)` / `barSource(a)` / `filmstrip(p)` | UI: range popover; Sections overlay (canvas: filmstrip, bar ruler, markers) |
+| `ClipTools.autoSlice(bars)` / `applySections()` / `undoSections()` / `removeMarker()` / `moveMarker()` / `sectionKey(e)` | Slice every ½–16 bars over the used part (outside parts = sections not used; cap `MAX_SECTIONS` 64); every edit snapshots for Undo / Ctrl+Z; grid origin = used start (`gridStart()`) (D-98) |
 
 ### 3.7m Workspace — `app/workspace.js` + `TimelinePanel` — ✅ *(v2.4 step 3, D-83–D-86)*
 | Member | Role |

@@ -108,7 +108,7 @@ class AssetPanel {
   roleTags(a) {
     const t = [a.parent ? `§${a.section + 1}` : a.kind === 'image' ? 'IMG' : 'VID'];
     if (this.engine.isSplit(a)) t.push(`${a.sections.length + 1} sections`);
-    if (a.asClip) t.push(`#${a.importance}`);
+    if (a.asClip && !a.parent) t.push(`#${a.importance}`);   // sections sit on their clip's card, not in the stack
     if (a.layer) t.push(a.layer.slice(0, 3).toUpperCase());
     if (this.engine.settings.storyMode && a.story !== 'none') t.push(({ hook: 'HOOK', result: 'RES', cta: 'CTA' })[a.story]);
     return t.join(' · ');
