@@ -87,9 +87,10 @@ class ClipEngine {
 
   // Assets used as auto-edit clips, in stack (Importance) order.
   // Cards in the Action Editor: whole clips (a clip with sections keeps
-  // its one card; its sections show as a strip inside it, Omar 2026-10-08).
+  // its one card; its sections show as a strip inside it, Omar 2026-10-08),
+  // plus sections made into clips of their own (D-100).
   get clips() {
-    return this.assets.filter(a => a.asClip && !a.parent).sort((a, b) => a.importance - b.importance);
+    return this.assets.filter(a => a.asClip && (!a.parent || a.own)).sort((a, b) => a.importance - b.importance);
   }
 
   // ---- clip model (v2.4 step 2, D-82) -------------------------------------
@@ -243,6 +244,7 @@ class ClipEngine {
       c.section = k;
       c.of = n;
       const b = this.sectionBounds(c);
+      if (c.used && (c.used.start !== b.start || c.used.end !== b.end)) c.ownThumb = null;   // its frame is redrawn (D-100)
       c.used = { start: b.start, end: b.end };
       c.name = `${p.name} · ${k + 1}/${n}`;
     }
@@ -297,6 +299,49 @@ class ClipEngine {
 
   dropSectionPlayer() { /* sections have no player of their own any more */ }
 
+  // Make a section a clip of its own (Omar, 2026-10-10; D-100): it gets
+  // its own card in the stack, right under its clip, and is picked through
+  // it; its chip stays on the clip's strip. Same file, same A / B decks.
+  setSectionOwn(id, on) {
+    const c = this.clipById(id);
+    if (!c || !c.parent || !!c.own === !!on) return;
+    c.own = !!on;
+    if (on) {
+      const p = this.parentOf(c);
+      c.asClip = true;
+      c.importance = (p && p.asClip ? p.importance : this.clips.length) + 0.5;
+      if (!c.ownThumb) this.sectionThumb(c);
+    }
+    this.renumber();
+    this.emit('clips');
+  }
+
+  // A section's card shows a frame from the middle of its part.
+  sectionThumb(c) {
+    const p = this.parentOf(c);
+    if (!p || !p.url || c._thumbing) return;
+    c._thumbing = true;
+    const b = this.sectionBounds(c);
+    const v = document.createElement('video');
+    v.muted = true; v.preload = 'auto'; v.src = p.url;
+    const done = () => { c._thumbing = false; v.removeAttribute('src'); };
+    v.addEventListener('error', done, { once: true });
+    v.addEventListener('loadeddata', () => {
+      v.addEventListener('seeked', () => {
+        try {
+          const cv = document.createElement('canvas');
+          cv.width = 160;
+          cv.height = Math.round(160 * (v.videoHeight || 9) / (v.videoWidth || 16));
+          cv.getContext('2d').drawImage(v, 0, 0, cv.width, cv.height);
+          c.ownThumb = cv;
+          this.emit('clips');
+        } catch (e) { /* not decodable */ }
+        done();
+      }, { once: true });
+      v.currentTime = (b.start + b.end) / 2;
+    }, { once: true });
+  }
+
   // A section clip: its own settings; media, file and size come from the
   // parent (read through, never copied).
   addSection(p, k, saved = {}) {
@@ -310,6 +355,7 @@ class ClipEngine {
       used: saved.used ? { ...saved.used } : { start: 0, end: null }, speed: saved.speed || 1, sections: [], fitBars: saved.fitBars || null,
       visual: { ...VisualLayer.defaults(), ...(saved.visual || {}) },
       repeats: saved.repeats || 0,
+      own: !!saved.own,          // its own card in the stack (D-100)
       ownThumb: null,
     };
     const engine = this;
@@ -819,7 +865,8 @@ class ClipEngine {
   // replaced by its sections (each with its own pace / band / speed).
   pickList() {
     const sm = this.settings.storyMode;
-    return this.stack.flatMap(c => (this.isSplit(c) ? this.sectionsOf(c).filter(s => s.asClip && !(sm && s.story !== 'none')) : [c]));
+    // (a section with its own card is picked through that card, once)
+    return this.stack.flatMap(c => (this.isSplit(c) ? this.sectionsOf(c).filter(s => s.asClip && !s.own && !(sm && s.story !== 'none')) : [c]));
   }
 
   // ---- Story Mode (v2.1 step 7, D-33–D-35) ------------------------------

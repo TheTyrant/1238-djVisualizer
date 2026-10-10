@@ -674,6 +674,17 @@ The brief's four questions were not answered before the build. Rather than guess
 - **Header width:** the channel column is 136 px (was 112) so the Start line fits, and both times read as m:ss (m:ss.s off the second).
 - Tested (`tests/trackstart.js`, 11 checks).
 
+### D-100 · Wide cards for many sections; a section as its own clip *(Accepted — built; Omar, 2026-10-10)*
+- **Problem:** a 21-minute clip cut into 33 sections overflowed its 172 px card, so the chips spilled past the edge.
+- **Wide cards:** a card with sections is as wide as its chips need: n × 16 + 12 px, and never under 172 px. 33 sections make a 540 px card; the 64-section cap makes about 1,040 px. Chips are at least 14 px and share the width by section length, as before. The thumbnail keeps its size on the left; the room beside it shows frames from across the clip (the Sections editor's filmstrip, made once per file). The Action clips row scrolls as before.
+- **"Make its own clip"** (from step 2, lost when sections moved onto one card on 2026-10-08):
+  - **Where:** in 03 Sound for the section, and ↗ on its row in the Sections editor.
+  - **What it does:** the section gets its own card and Importance in the stack, right under its clip, and keeps its pace, band, speed, repeats and lock. It is picked through its card only (`pickList` leaves it off the parent's strip pool). It uses the same file and the same A / B decks.
+  - **On the clip's card:** its chip stays, dashed and labelled ↗n; clicking it goes to the section's card.
+  - **Its card:** shows a frame from the middle of the section, and "↩ Back" puts it back on the strip.
+  - **Saved and loaded:** saved as `own` on the section. It follows the section's position number if the markers change. Older projects are unchanged.
+- Tested (`tests/clipmodel.js` §5c).
+
 ## I. Known carry-overs (pre-existing on `main`, not changed)
 - Placeholder text drawn with `p.text()` in WebGL mode doesn't render, because no font is loaded (affects the Media Layers "Upload images…" prompt). v2 uses a DOM overlay for its own hints.
 - `visualizer.js` has duplicate `drawAudioWaves` / `drawMandala` / `drawTunnel` definitions (the later ones win), plus unused snake-game code.

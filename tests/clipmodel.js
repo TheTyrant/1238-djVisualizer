@@ -259,7 +259,7 @@ const sl = await E(async () => {
   e.setUsed(p.id, 0, null);
   btn(4).click(); await wait();
   // × in the list on section 3 removes the cut before it (16 s).
-  document.querySelectorAll('#sectList .sect-x')[2].click(); await wait();
+  document.querySelectorAll('#sectList .sect-del')[2].click(); await wait();
   out.listX = p.sections.slice();
   return out;
 });
@@ -289,6 +289,54 @@ await page.mouse.move(g6.x, g6.y); await sleep(100); await page.mouse.move(g6.x,
 await page.mouse.click(g6.x, g6.yX); await sleep(150);
 const k3 = await E(() => { const s = djApp.clipEngine.mediaAssets[0].sections.slice(); djApp.clipTools.closeSections(); djApp.clipEngine.setSections(djApp.clipEngine.mediaAssets[0].id, []); return s; });
 ok('click a marker to select it: → moves it one bar, Delete removes it; the × on a hovered marker removes it', k1.join() === '10,24,32' && k2.join() === '24,32' && k3.join() === '32', JSON.stringify([k1, k2, k3]));
+
+// 5c) Many sections: the card grows so every chip fits; a section can be
+// made a clip of its own and put back (Omar, 2026-10-10; D-100).
+const wide = await E(async () => {
+  const e = djApp.clipEngine, p = e.mediaAssets[0];
+  e.setSpeed(p.id, 1); e.setUsed(p.id, 0, null);
+  e.setSections(p.id, Array.from({ length: 32 }, (_, k) => (k + 1) * 1.2));   // 33 sections
+  await new Promise(r => setTimeout(r, 300));
+  const card = document.querySelector(`.bin-card[data-id="${p.id}"]`), cr = card.getBoundingClientRect();
+  const chips = [...card.querySelectorAll('.bin-section')].map(b => b.getBoundingClientRect());
+  return { n: chips.length, cardW: Math.round(cr.width), inside: chips.every(r => r.left >= cr.left - 0.5 && r.right <= cr.right + 0.5), minChip: Math.round(Math.min(...chips.map(r => r.width))), frames: !!card.querySelector('.bin-frames'), thumbW: Math.round((card.querySelector('.bin-thumb') || card).getBoundingClientRect().width) };
+});
+ok('33 sections: the card grows so every chip fits inside it (14 px at least), frames beside the thumbnail', wide.n === 33 && wide.cardW >= 33 * 16 + 12 && wide.inside && wide.minChip >= 14 && wide.frames && wide.thumbW <= 172, JSON.stringify(wide));
+
+const own = await E(async () => {
+  const e = djApp.clipEngine, p = e.mediaAssets[0], s7 = e.sectionsOf(p)[6];
+  const before = { stack: e.stack.length, pool: e.pickList().length };
+  // from the section's settings
+  e.select(s7.id); djApp.sidebar.open('assets'); await new Promise(r => setTimeout(r, 150));
+  document.getElementById('propSectOwn').click(); await new Promise(r => setTimeout(r, 400));
+  const ids = e.stack.map(c => c.id), pool = e.pickList();
+  const card = document.querySelector(`.bin-card[data-id="${s7.id}"]`);
+  const chip = document.querySelector(`.bin-card[data-id="${p.id}"] .bin-section.is-own`);
+  const after = { stack: e.stack.length, pool: pool.length, inPool: pool.filter(c => c.id === s7.id).length, next: ids[ids.indexOf(p.id) + 1] === s7.id, card: !!card, chip: chip && chip.textContent, thumb: !!s7.ownThumb, imp: !!document.getElementById('propImportance') };
+  // its own place in the stack
+  e.moveClip(s7.id, 0);
+  const top = e.stack[0].id === s7.id;
+  // saved and reopened
+  const blob = await djApp.project.build();
+  djApp.project.dirty = false;
+  await djApp.project.open(new File([blob], 'own.mnt'));
+  await window.__waitFast();
+  const p2 = e.mediaAssets[0], k2 = e.sectionsOf(p2)[6];
+  const kept = { own: !!k2.own, top: e.stack[0].id === k2.id };
+  // back onto the strip, from its card
+  await new Promise(r => setTimeout(r, 300));
+  document.querySelector(`.bin-card[data-id="${k2.id}"] .bin-sect`).click(); await new Promise(r => setTimeout(r, 300));
+  const back = { own: !!k2.own, stack: e.stack.length, pool: e.pickList().filter(c => c.id === k2.id).length, card: !!document.querySelector(`.bin-card[data-id="${k2.id}"]`) };
+  // the Sections editor's ↗
+  djApp.clipTools.openSections(p2); await new Promise(r => setTimeout(r, 150));
+  document.querySelectorAll('#sectList .sect-own')[2].click(); await new Promise(r => setTimeout(r, 150));
+  const viaEditor = e.sectionsOf(p2)[2].own;
+  djApp.clipTools.closeSections();
+  e.setSections(p2.id, []);
+  return { before, after, top, kept, back, viaEditor, clipsLeft: e.stack.length };
+});
+ok('"Make its own clip": its own card under its clip, picked once through it, chip marked ↗, frame of its own, Importance', own.after.stack === own.before.stack + 1 && own.after.pool === own.before.pool && own.after.inPool === 1 && own.after.next && own.after.card && own.after.chip === '↗7' && own.after.imp, JSON.stringify(own.after));
+ok('it moves in the stack on its own; saved and reopened; "↩ Back" returns it to the strip; ↗ in the Sections editor works too', own.top && own.kept.own && own.kept.top && !own.back.own && own.back.stack === own.before.stack && own.back.pool === 1 && !own.back.card && own.viaEditor && own.clipsLeft === own.before.stack, JSON.stringify({ top: own.top, kept: own.kept, back: own.back, viaEditor: own.viaEditor }));
 
 // 6) Live: two sections of one video blend with the band transitions
 // (each section has its own player on the same file).

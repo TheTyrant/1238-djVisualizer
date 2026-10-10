@@ -108,7 +108,7 @@ class AssetPanel {
   roleTags(a) {
     const t = [a.parent ? `§${a.section + 1}` : a.kind === 'image' ? 'IMG' : 'VID'];
     if (this.engine.isSplit(a)) t.push(`${a.sections.length + 1} sections`);
-    if (a.asClip && !a.parent) t.push(`#${a.importance}`);   // sections sit on their clip's card, not in the stack
+    if (a.asClip && (!a.parent || a.own)) t.push(`#${a.importance}`);   // sections sit on their clip's card, not in the stack (unless made their own clip, D-100)
     if (a.layer) t.push(a.layer.slice(0, 3).toUpperCase());
     if (this.engine.settings.storyMode && a.story !== 'none') t.push(({ hook: 'HOOK', result: 'RES', cta: 'CTA' })[a.story]);
     return t.join(' · ');
@@ -257,7 +257,7 @@ class AssetPanel {
       imp.value = a.importance;
       imp.title = 'Place in the Action Editor stack (1 = top, picked most)';
       imp.addEventListener('change', () => this.engine.setClipImportance(a.id, parseInt(imp.value, 10) || 1));
-      if (!a.parent) clipG.appendChild(this.row('Importance', imp));
+      if (!a.parent || a.own) clipG.appendChild(this.row('Importance', imp));
       // Repeats (D-93): how many times it may appear; 0 = no limit.
       const rep = document.createElement('input');
       rep.type = 'number'; rep.id = 'propRepeats'; rep.min = 0; rep.step = 1; rep.value = a.repeats || 0;
@@ -307,8 +307,19 @@ class AssetPanel {
       const p = e.parentOf(a);
       const note = document.createElement('p');
       note.className = 'hint';
-      note.textContent = `Section ${a.section + 1} of ${a.of} of ${p ? p.name : 'its clip'} — on that clip's card; same video, its own settings.`;
+      note.textContent = a.own
+        ? `Section ${a.section + 1} of ${a.of} of ${p ? p.name : 'its clip'} — a clip of its own, with its own card and place in the stack; same video.`
+        : `Section ${a.section + 1} of ${a.of} of ${p ? p.name : 'its clip'} — on that clip's card; same video, its own settings.`;
       g.appendChild(note);
+      // Make it a clip of its own, or put it back on the strip (D-100).
+      const own = document.createElement('button');
+      own.type = 'button';
+      own.className = 'btn btn-block';
+      own.id = 'propSectOwn';
+      own.textContent = a.own ? `↩ Back into ${p ? p.name : 'its clip'}` : '↗ Make its own clip';
+      own.title = a.own ? 'Return it to its clip’s strip' : 'Give this section its own card in the Action clips, with its own place in the stack';
+      own.addEventListener('click', () => e.setSectionOwn(a.id, !a.own));
+      g.appendChild(own);
     }
     // Amount used
     const r = e.usedRange(a);

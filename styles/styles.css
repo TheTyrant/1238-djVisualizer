@@ -1522,3 +1522,12 @@ body.clean-view .main-content { grid-column: 1 / -1; grid-row: 1 / -1; }
 .ch-src .ch-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .ch-src .activity-light { width: 7px; height: 7px; }
 #timelineCanvas.grabbing { cursor: grabbing; }
+
+/* Wide cards for many sections, and sections with their own card (D-100) */
+.bin-thumbrow { display: flex; flex: 0.8 1 0; min-height: 24px; border-bottom: 1px solid var(--line); background: var(--ink); }
+.bin-thumbrow .bin-thumb { flex: none; width: 170px; height: 100%; min-height: 0; border-bottom: none; }
+.bin-frames { flex: 1 1 0; min-width: 0; height: 100%; display: block; object-fit: cover; border-left: 1px solid var(--line); }
+.bin-section.is-own { background: transparent; color: inherit; border-style: dashed; }
+.bin-card.is-own-section .bin-name::before { content: "↗ "; }
+.sect-own { margin-right: 4px; }
+.sect-own.is-on { background: var(--ink); color: var(--paper); }

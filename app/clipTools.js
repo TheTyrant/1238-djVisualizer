@@ -444,17 +444,25 @@ class ClipTools {
       const li = document.createElement('li');
       const bars = +((bb.end - bb.start) / bar).toFixed(2);
       const txt = document.createElement('span');
-      txt.textContent = `${c.name} · ${fmtTime(bb.start, true)}–${fmtTime(bb.end, true)} · ${bars} bar${bars === 1 ? '' : 's'}${c.asClip ? '' : ' · not used'}`;
+      txt.textContent = `${c.name} · ${fmtTime(bb.start, true)}–${fmtTime(bb.end, true)} · ${bars} bar${bars === 1 ? '' : 's'}${c.asClip ? '' : ' · not used'}${c.own ? ' · own clip' : ''}`;
       const x = document.createElement('button');
       x.type = 'button';
-      x.className = 'sect-x';
+      x.className = 'sect-x sect-del';
       x.textContent = '×';
       // Removing a section removes the cut at its start (the first one: at its end).
       const mi = k > 0 ? k - 1 : 0;
       x.title = k > 0 ? 'Remove the cut before this section (joins it to the one before)' : 'Remove the cut after this section (joins it to the next)';
       x.setAttribute('aria-label', `Remove ${c.name}`);
       x.addEventListener('click', () => this.removeMarker(mi));
-      li.append(txt, x);
+      // ↗ its own clip (a card of its own in the stack), or back (D-100)
+      const o = document.createElement('button');
+      o.type = 'button';
+      o.className = 'sect-x sect-own' + (c.own ? ' is-on' : '');
+      o.textContent = c.own ? '↩' : '↗';
+      o.title = c.own ? 'Back onto the clip’s strip' : 'Make this section its own clip (its own card in the Action clips)';
+      o.setAttribute('aria-label', `${c.own ? 'Put back' : 'Make its own clip'}: ${c.name}`);
+      o.addEventListener('click', () => this.engine.setSectionOwn(c.id, !c.own));
+      li.append(txt, o, x);
       list.appendChild(li);
     });
     if (!list.children.length) {

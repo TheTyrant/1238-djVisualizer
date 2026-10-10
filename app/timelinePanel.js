@@ -429,6 +429,22 @@ class TimelinePanel {
     return cards.length;
   }
 
+  // Frames from across a clip, side by side, beside a wide card's
+  // thumbnail (D-100). The filmstrip is the Sections editor's (made once).
+  drawCardFrames(clip, cv) {
+    const tools = this.app.clipTools, strip = tools && tools.strips.get(clip.url);
+    if (!strip) { if (tools && clip.url) tools.filmstrip(clip).then(() => this.renderBin()); return; }
+    const fr = strip.frames.filter(Boolean);
+    if (!fr.length) return;
+    const g = cv.getContext('2d'), cellW = 160 * (cv.height / 90), n = Math.max(1, Math.round(cv.width / cellW)), w = cv.width / n;
+    g.fillStyle = '#000'; g.fillRect(0, 0, cv.width, cv.height);
+    for (let i = 0; i < n; i++) {
+      const f = fr[Math.min(fr.length - 1, Math.floor(((i + 0.5) / n) * fr.length))];
+      const s = Math.max(w / f.width, cv.height / f.height), sw = w / s, sh = cv.height / s;
+      g.drawImage(f, (f.width - sw) / 2, (f.height - sh) / 2, sw, sh, i * w, 0, w - 1, cv.height);
+    }
+  }
+
   showInsert(slot, group = this.el.binCards.querySelector('.bin-group.drop-target')) {
     this.el.binCards.querySelectorAll('.insert-before, .insert-after').forEach(c => c.classList.remove('insert-before', 'insert-after'));
     const cards = Array.from((group || this.el.binCards).querySelectorAll('.bin-card:not(.story-card)'));
@@ -487,6 +503,11 @@ class TimelinePanel {
       card.setAttribute('aria-selected', String(clip.id === this.engine.selectedId));
       card.setAttribute('aria-label', `${i + 1}. ${clip.name}`);
       card.title = 'Click for options. Drag (or Alt+←/→) to change its place in the stack.';
+      const ownSect = !!(clip.parent && clip.own);   // a section with its own card (D-100)
+      if (ownSect) {
+        card.classList.add('is-own-section');
+        if (!clip.ownThumb && clip.ready) this.engine.sectionThumb(clip);
+      }
 
       let thumb;
       if (clip.thumb) {
@@ -546,12 +567,23 @@ class TimelinePanel {
       tagText.className = 'bin-tag-text';
       tagText.textContent = t.join(' · ');
       tags.appendChild(tagText);
-      if (isVid) {
+      if (ownSect) {
+        const p = this.engine.parentOf(clip);
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.className = 'bin-sect';
+        back.textContent = '↩ Back';
+        back.title = `Back into ${p ? p.name : 'its clip'} (its chip on that card's strip)`;
+        back.setAttribute('aria-label', back.title);
+        back.addEventListener('click', (ev) => { ev.stopPropagation(); this.engine.setSectionOwn(clip.id, false); });
+        back.addEventListener('keydown', (ev) => ev.stopPropagation());
+        tags.appendChild(back);
+      } else if (isVid) {
         const sb = document.createElement('button');
         sb.type = 'button';
         sb.className = 'bin-sect';
         sb.textContent = this.engine.isSplit(clip) ? 'Edit §' : 'Sections';
-        sb.title = 'Split this clip on bar markers (each section becomes its own card)';
+        sb.title = 'Split this clip on bar markers (the sections show as a strip on this card)';
         sb.addEventListener('click', (ev) => { ev.stopPropagation(); this.app.clipTools.openSections(clip); });
         sb.addEventListener('keydown', (ev) => ev.stopPropagation());
         tags.appendChild(sb);
@@ -572,22 +604,47 @@ class TimelinePanel {
           const b = this.engine.sectionBounds(s);
           const btn = document.createElement('button');
           btn.type = 'button';
-          btn.className = `bin-section band-${s.band || 'any'}` + (s.id === this.engine.selectedId ? ' selected' : '') + (s.asClip ? '' : ' is-off');
+          btn.className = `bin-section band-${s.band || 'any'}` + (s.id === this.engine.selectedId ? ' selected' : '') + (s.asClip ? '' : ' is-off') + (s.own ? ' is-own' : '');
           btn.style.flexGrow = String(Math.max(0.05, b.end - b.start));
-          btn.textContent = tagOf.get(s.id) || String(s.section + 1);
+          btn.textContent = s.own ? `↗${s.section + 1}` : (tagOf.get(s.id) || String(s.section + 1));
           btn.title = `${s.name} · ${fmtTime(b.start, true)}–${fmtTime(b.end, true)} · ${s.band === 'any' ? 'any band' : s.band}${s.pace !== 'global' ? ' · ' + s.pace : ''}${s.speed !== 1 ? ' · ' + ClipTools.speedLabel(s.speed) : ''} — click to edit this section`;
-          btn.addEventListener('click', (ev) => { ev.stopPropagation(); this.engine.select(s.id); if (this.app.sidebar) this.app.sidebar.open('assets'); });
+          if (s.own) btn.title = `${s.name} has its own card — click to go to it`;
+          btn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            this.engine.select(s.id);
+            if (this.app.sidebar) this.app.sidebar.open('assets');
+            if (s.own) { const own = this.el.binCards.querySelector(`.bin-card[data-id="${s.id}"]`); if (own) own.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); }
+          });
           btn.addEventListener('keydown', (ev) => ev.stopPropagation());
           strip.appendChild(btn);
         });
+      }
+      // Many sections (D-100): the card grows so every chip fits (at least
+      // 14 px each), and the room beside the thumbnail shows frames from
+      // across the clip.
+      let top = thumb;
+      if (strip) {
+        const n = clip.sections.length + 1, w = Math.max(172, n * 16 + 12);
+        if (w > 172) {
+          card.style.width = `${w}px`;
+          card.classList.add('is-wide');
+          top = document.createElement('div');
+          top.className = 'bin-thumbrow';
+          const frames = document.createElement('canvas');
+          frames.className = 'bin-frames';
+          frames.width = w - 172; frames.height = 90;
+          this.drawCardFrames(clip, frames);
+          top.append(thumb, frames);
+        }
       }
       const member = document.createElement('span');
       member.className = 'bin-member';
       member.textContent = tagOf.get(clip.id) || (strip ? `${clip.sections.length + 1}§` : '');
       member.title = 'Band member: band letter + rank within the band';
-      card.append(rank, member, thumb, bar, meta, tags);
+      card.append(rank, member, top, bar, meta, tags);
       if (strip) card.appendChild(strip);
-      if (this.engine.clipById(this.engine.selectedId) && this.engine.clipById(this.engine.selectedId).parent === clip.id) card.classList.add('selected');
+      const selC = this.engine.clipById(this.engine.selectedId);
+      if (selC && selC.parent === clip.id && !selC.own) card.classList.add('selected');
       const select = () => {
         this.engine.select(clip.id);
         if (this.app.sidebar) this.app.sidebar.open('assets');

@@ -218,6 +218,7 @@ class ProjectFile {
           id: a.id, parent: a.parent, section: a.section, of: a.of, name: a.name, kind: a.kind,
           asClip: a.asClip, band: a.band, pace: a.pace, importance: a.importance, story: a.story, fade: { ...(a.fade || {}) },
           used: { ...a.used }, speed: a.speed, fitBars: a.fitBars, visual: { ...(a.visual || VisualLayer.defaults()) }, repeats: a.repeats || 0,
+          own: !!a.own,   // D-100
         });
         continue;
       }
