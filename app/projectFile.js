@@ -286,6 +286,7 @@ class ProjectFile {
       tempo: app.tempo.toJSON(),   // D-81
       masterFade: JSON.parse(JSON.stringify(app.masterFade)),   // D-92
       trackLength: app.trackLength,   // D-97
+      trackStart: app.trackStart || 0,   // D-99
       display: app.display ? app.display.key : 'original',
       engine: { settings: { ...e.settings }, bandTransitions: { ...e.bandTransitions } },
       layers,
@@ -488,6 +489,9 @@ Cancel = Save over it`);
     Object.assign(e.settings, project.engine.settings);
     e.settings.storyMode = true;   // D-58: positions are always available
     Object.assign(e.bandTransitions, project.engine.bandTransitions);
+    // Control track start (D-99) before the grid: the saved grid is already
+    // in timeline time. Older projects start at 0:00.
+    app.trackSource.setLead(project.trackStart || 0);
     // Tempo grid (D-81): projects from before Stable05 keep the live clock.
     app.tempo.fromJSON(project.tempo || null);
     app.trackLength = project.trackLength || null;

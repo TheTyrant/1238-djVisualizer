@@ -590,7 +590,7 @@ class OfflineRenderer {
       // Fades follow the mode that was on screen at each moment.
       const rec = app.record;
       const modeAt = (t) => { const f = rec.frame(Math.round(t * SessionRecord.FPS)); return f ? f.mode : app.visualizer.currentMode; };
-      parts.push({ buffer: await this.decode(app.trackSource.file), at: 0, offset: 0, level: (t) => app.musicLevelAt(t, modeAt(t)) });   // story fades × master fades (D-92)
+      parts.push({ buffer: await this.decode(app.trackSource.file), at: app.trackStart, offset: 0, level: (t) => app.musicLevelAt(t, modeAt(t)) });   // story fades × master fades (D-92)
     }
     const v = app.voice;
     if (v.isLoaded && v.blob && !v.muted) {

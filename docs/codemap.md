@@ -56,6 +56,7 @@ tests/
   fastpass.js              Step 1: fast pass, tempo grid, ×2/÷2/type-in, played-wins, refill, cancel, never-played export
   workspace.js             Step 3: card contrast, band strip = cut list, member tags, handles + reset + remembered, AE panel, group by band
   tracklength.js           Master track length: label, 30 s floor, cuts / CTA / credits / export follow, playback stops, saved
+  trackstart.js            Control track start: Start box, pre-roll cuts on the grid, playback across the start, export at the start, fades, grab / drop / Alt / Esc, saved, new track resets
   shelves.js               Repeats (images + videos), shelves as menu lists, fold memory, Ctrl+Space clean view
   timeline.js              Step 6: ruler select / Shift / Esc, scrub keeps the cut list, L loop, master fades, 8-bar Selection export with edge fades
   visual.js                Step 5: Galaxy Over live + export (no black box), Trail, Replace, saved, Mandala export speed (GPU=1)
@@ -347,6 +348,14 @@ Tokens in `:root`: `--surface #EDEAE4 · --panel #E3DFD7 · --steel #D7DADC · -
 | `drawBandStrip()` / `stripDrawn` | Compact clip lane (exact cut list, band colour, member tags, over row) |
 | `ClipEngine.bandMembers()` / `memberTags()` | B1 / M1 / H1 / A1 by band and stack position |
 | `renderMembers()` / `groupAt()` / `dropInGroup()` | Band members readout; grouped Action Editor drag (rank / band) |
+
+### 3.7n Control track start — `TrackSource` + `app.js` + `TimelinePanel` — ✅ *(D-99)*
+| Member | Role |
+|---|---|
+| `TrackSource.lead` / `setLead()` / `pre` / `runPre()` / `fileDuration` | Start offset; `currentTime` / `duration` / `seek` in timeline time; pre-roll clock with the element paused |
+| `app.trackStart` / `setTrackStart(s)` / `musicLength()` / `songLength()` | Moves the grid with the music, re-fills the fast pass; song end = start + music |
+| `FastPass.fill()` / `FastPass.silence()` | Silent frames before the start, cuts on the grid |
+| `TimelinePanel.grabTrack()` / `grabLead()` / `dropTrack()` / `initTrackStart()` / `drawTrackStart()` / `leadShown()` | Double-click grab, whole-bar snap (Alt free), click drop, Esc; Start box; START line |
 
 ### 3.11 Invariants
 1. `audioProcessor.js` is never modified. *(v2.4: the fast pass drives a second instance with simulated inputs; it never patches the class.)*

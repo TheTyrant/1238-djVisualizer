@@ -40,6 +40,7 @@ class TimelinePanel {
     this.initCanvasInteraction();
     this.initMasterFades();
     this.initTrackLength();
+    this.initTrackStart();
 
     // Text lane appears once there is any text (D-60).
     this.app.text.on(() => {
@@ -673,6 +674,7 @@ class TimelinePanel {
     };
     c.addEventListener('pointerdown', (e) => {
       const r = c.getBoundingClientRect();
+      if (this.grab) { e.stopImmediatePropagation(); this.dropTrack(this.grabLead(timeAt(e), e.altKey)); return; }
       const hit = (this.textHits || []).find(b => e.clientX - r.left >= b.x0 && e.clientX - r.left <= b.x1 && e.clientY - r.top >= b.y0 && e.clientY - r.top <= b.y1);
       if (hit) {
         e.stopImmediatePropagation();
@@ -700,6 +702,7 @@ class TimelinePanel {
       this.app.scrubTo(timeAt(e));
     });
     c.addEventListener('pointermove', (e) => {
+      if (this.grab) { this.grab.lead = this.grabLead(timeAt(e), e.altKey); return; }
       if (this.textDrag) {
         const d = this.textDrag;
         const dt = ((e.clientX - d.x) / c.clientWidth) * this.view.span;
@@ -751,7 +754,94 @@ class TimelinePanel {
       this.view.start = Math.max(0, Math.min(dur - this.view.span, this.view.start));
       this.view.fit = this.view.span >= dur;
     }, { passive: false });
-    c.addEventListener('dblclick', () => { this.view.fit = true; });
+    c.addEventListener('dblclick', (e) => {
+      const r = c.getBoundingClientRect(), y = e.clientY - r.top;
+      // On the Master lane: pick up the control track (D-99); elsewhere: fit.
+      if (this.app.isTrackMode() && y >= this.ROWS.ruler && y < this.ROWS.ruler + this.ROWS.master) { this.grabTrack(timeAt(e)); return; }
+      this.view.fit = true;
+    });
+  }
+
+  // ---- control track start (D-99) -----------------------------------------
+  // Two ways to move where the music starts: double-click the Master lane to
+  // pick it up, move, click to drop (snaps to whole bars; Alt = free; Esc
+  // cancels) — or type a time in the Start box (exact).
+
+  // Compact m:ss (m:ss.s when not on a whole second) — fits the header.
+  static fmtStart(s) {
+    const t = Math.round(s * 10) / 10, m = Math.floor(t / 60), r = +(t - m * 60).toFixed(1);
+    const sec = Number.isInteger(r) ? String(r).padStart(2, '0') : r.toFixed(1).padStart(4, '0');
+    return `${m}:${sec}`;
+  }
+
+  // "1:05", "0:08.5", "8", "8.25" → seconds (null if not a time).
+  static parseStart(txt) {
+    const m = String(txt).trim().match(/^(?:(\d+):)?(\d+(?:\.\d*)?)$/);
+    if (!m) return null;
+    return (m[1] ? +m[1] * 60 : 0) + +m[2];
+  }
+
+  leadShown() { return this.grab ? this.grab.lead : this.app.trackStart; }
+
+  grabTrack(t) {
+    if (this.app.timelineRolling()) this.app.toggleAudio();
+    this.grab = { from: this.app.trackStart, at: t, lead: this.app.trackStart };
+    this.canvas.classList.add('grabbing');
+  }
+
+  // Where the music would start with the pointer at t: moved by whole bars
+  // (the grid moves with the music, so it stays on its bars), Alt = free.
+  grabLead(t, free) {
+    const g = this.grab, bar = this.app.tempo.barSec;
+    let d = t - g.at;
+    if (!free && bar > 0) d = Math.round(d / bar) * bar;
+    return Math.max(0, Math.min(TrackSource.MAX_START, g.from + d));
+  }
+
+  dropTrack(lead) {
+    if (!this.grab) return;
+    this.grab = null;
+    this.canvas.classList.remove('grabbing');
+    if (lead != null) this.app.setTrackStart(lead);
+  }
+
+  initTrackStart() {
+    const inp = document.getElementById('masterStart');
+    if (!inp) return;
+    const commit = () => {
+      const v = TimelinePanel.parseStart(inp.value);
+      if (v != null) this.app.setTrackStart(v);
+      inp.value = TimelinePanel.fmtStart(this.app.trackStart);
+    };
+    inp.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); commit(); inp.blur(); }
+      else if (e.key === 'Escape') { e.preventDefault(); inp.value = TimelinePanel.fmtStart(this.app.trackStart); inp.blur(); }
+    });
+    inp.addEventListener('change', commit);
+    inp.addEventListener('focus', () => inp.select());
+    document.addEventListener('keydown', (e) => {
+      if (this.grab && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); this.dropTrack(null); }
+    }, true);
+  }
+
+  // The start line on the Master lane, and the grabbed track's label.
+  drawTrackStart(ctx, x, y, h) {
+    const app = this.app, lead = this.leadShown();
+    if (!app.isTrackMode() || (!(lead > 0) && !this.grab)) return;
+    const sx = Math.round(x(lead)) + 0.5;
+    ctx.save();
+    if (lead > 0) { ctx.fillStyle = 'rgba(0, 0, 0, 0.35)'; ctx.fillRect(x(0), y, sx - x(0), h); }
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(sx, y); ctx.lineTo(sx, y + h); ctx.stroke();
+    const label = this.grab ? `START ${TimelinePanel.fmtStart(lead)} · click to drop · Esc` : `START ${TimelinePanel.fmtStart(lead)}`;
+    ctx.font = '600 10px "JetBrains Mono", monospace';
+    const w = ctx.measureText(label).width + 8;
+    ctx.fillStyle = this.grab ? '#ffffff' : 'rgba(0, 0, 0, 0.6)';
+    ctx.fillRect(sx + 2, y + 3, w, 15);
+    ctx.fillStyle = this.grab ? '#000000' : '#ffffff';
+    ctx.fillText(label, sx + 6, y + 14);
+    ctx.restore();
   }
 
   // ---- master track length (D-97) ------------------------------------------
@@ -773,7 +863,7 @@ class TimelinePanel {
     document.body.appendChild(pop);
     const $ = (id) => pop.querySelector('#' + id);
     const sync = () => {
-      const d = this.app.trackSource.duration || 0, L = this.app.songLength();
+      const d = this.app.trackSource.fileDuration || 0, L = this.app.musicLength();
       $('lenRange').max = d; $('lenRange').value = L;
       $('lenMin').value = Math.floor(L / 60); $('lenSec').value = +(L % 60).toFixed(1);
       $('lenFull').textContent = `of ${fmtTime(d, false)}`;
@@ -904,7 +994,7 @@ class TimelinePanel {
   drawFadeRamps(ctx, C, x, y, h) {
     const app = this.app, F = app.masterFade;
     if (!app.isTrackMode() || !(F.in.on || F.out.on)) return;
-    const dur = app.trackSource.duration || 0;
+    const dur = app.songLength() || 0, s0 = app.trackStart;
     ctx.save();
     ctx.strokeStyle = '#ffd400'; ctx.lineWidth = 1.5;
     ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
@@ -920,8 +1010,8 @@ class TimelinePanel {
       for (let i = 0; i <= n; i++) { const t = t0 + ((t1 - t0) * i) / n; const yy = y + h - app.masterFadeLevel(t) * (h - 4); if (i) ctx.lineTo(x(t), yy); else ctx.moveTo(x(t), yy); }
       ctx.stroke();
     };
-    if (F.in.on) ramp(0, Math.min(dur, app.fadeSeconds(F.in)));
-    if (F.out.on && dur) ramp(Math.max(0, dur - app.fadeSeconds(F.out)), dur);
+    if (F.in.on) ramp(s0, Math.min(dur, s0 + app.fadeSeconds(F.in)));
+    if (F.out.on && dur) ramp(Math.max(s0, dur - app.fadeSeconds(F.out)), dur);
     ctx.restore();
   }
 
@@ -1036,12 +1126,21 @@ class TimelinePanel {
 
     this.el.badge.textContent = track ? `TRACK ${fmtTime(this.app.songLength(), false)}` : 'LIVE';
     this.el.badge.className = `badge ${track ? 'track' : 'live'}`;
-    this.el.masterSub.textContent = track ? 'Track' : 'Live session';
-    // The track's length, monitored under its label; click to set it (D-97).
+    const subTxt = track ? (this.app.trackSource.file ? this.app.trackSource.file.name.replace(/\.[^.]+$/, '') : 'Track') : 'Live Session';
+    if (this.el.masterSub.textContent !== subTxt) { this.el.masterSub.textContent = subTxt; this.el.masterSub.title = subTxt; }
+    // Start (D-99) and the music's length (D-97), on one line under the label.
+    const startRow = document.getElementById('masterStartRow');
+    if (startRow) startRow.hidden = !track;
+    const startIn = document.getElementById('masterStart');
+    if (startIn && document.activeElement !== startIn) {
+      const v = TimelinePanel.fmtStart(this.grab ? this.grab.lead : this.app.trackStart);
+      if (startIn.value !== v) startIn.value = v;
+    }
+    if (startIn) startIn.classList.toggle('is-set', this.app.trackStart > 0 || !!this.grab);
     const lenBtn = document.getElementById('masterLength');
     if (lenBtn) {
       lenBtn.hidden = !track;
-      const txt = track ? `${fmtTime(this.app.songLength(), false)}${this.app.trackLength ? ' ✂' : ''}` : '';
+      const txt = track ? `${TimelinePanel.fmtStart(Math.round(this.app.musicLength()))}${this.app.trackLength ? ' ✂' : ''}` : '';
       if (lenBtn.textContent !== txt) lenBtn.textContent = txt;
       lenBtn.classList.toggle('is-set', !!this.app.trackLength);
     }
@@ -1193,6 +1292,7 @@ class TimelinePanel {
     this.drawRuler(ctx, C, x, W, R);
     this.drawMaster(ctx, D, x, W, yMaster, R.master, now);
     this.drawFadeRamps(ctx, D, x, yMaster, R.master);
+    this.drawTrackStart(ctx, x, yMaster, R.master);   // D-99
     this.drawClips(ctx, D, x, W, yClips, R.clips, now);
     if (this.app.voice.isLoaded) this.drawVoice(ctx, D, x, W, yClips + R.clips, R.voice);
     if (this.app.text.items.length) this.drawText(ctx, D, x, W, this.textLaneY(), R.text);
@@ -1253,10 +1353,11 @@ class TimelinePanel {
       const played = Scope.curveGradient(ctx, 0, W, P);
       const ahead = Scope.fillGradient(ctx, y + 4, y + h - 4, P.fillTop, P.fillTop);
       const n = this.peaks.length / 2;
-      const dur = this.peaksDuration || this.app.trackSource.duration || 1;
+      const dur = this.peaksDuration || this.app.trackSource.fileDuration || 1;
+      const lead = this.leadShown();   // the music starts here (D-99)
       for (let px = 0; px < W; px++) {
-        const t0 = this.view.start + (px / W) * this.view.span;
-        const t1 = this.view.start + ((px + 1) / W) * this.view.span;
+        const t0 = this.view.start + (px / W) * this.view.span - lead;
+        const t1 = this.view.start + ((px + 1) / W) * this.view.span - lead;
         const i0 = Math.floor((t0 / dur) * n), i1 = Math.max(i0 + 1, Math.floor((t1 / dur) * n));
         if (i0 >= n || i1 <= 0) continue;
         let mn = 0, mx = 0;

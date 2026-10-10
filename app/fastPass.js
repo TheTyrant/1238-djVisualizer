@@ -193,7 +193,7 @@ class FastPass {
 
     Object.assign(out, FastPass.tempoOf(out));
     this.data = out;
-    this.app.tempo.detect(out.tempo, out.offset);
+    this.app.tempo.detect(out.tempo, out.offset + this.app.trackStart);   // file time → timeline (D-99)
     this.fill({ rolling: true });
     this.setState('done', 100, out.tempo > 0 ? `${out.tempo} BPM` : 'No steady beat found');
     return true;
@@ -372,10 +372,13 @@ class FastPass {
     try {
       FastPass.withClock(null, () => {
         let lastBeat = viz.lastBeatTime;
-        for (let f = 0; f < d.frames; f++) {
+        // Before the music starts (D-99) the frames are silent; the cuts
+        // still follow the grid.
+        const lead = Math.round(app.trackStart * fps), total = d.frames + lead;
+        for (let f = 0; f < total; f++) {
           FastPass.clockMs = T0 + (f * 1000) / fps;
           t = f / fps;
-          const data = this.frameData(f);
+          const data = f < lead ? FastPass.silence() : this.frameData(f - lead);
           DJVisualizer.prototype.updateAudioData.call(viz, data);
           const edge = viz.lastBeatTime !== lastBeat;
           lastBeat = viz.lastBeatTime;
@@ -388,7 +391,7 @@ class FastPass {
     // Cuts: fast ones only where nothing was played for real.
     e.segments = e.segments.filter(s => s.pass !== 'fast');
     if (sim) {
-      const songEnd = Math.min(d.duration, app.songLength() || d.duration);
+      const songEnd = Math.min(d.duration + app.trackStart, app.songLength() || d.duration);
       sim.closeOpenSegment(songEnd);
       const played = FastPass.spans(e.segments.map(s => [s.start, s.end == null ? e.lastAdvanceTime : s.end]));
       const pieces = [];
@@ -415,7 +418,7 @@ class FastPass {
     sim.assets = e.assets;
     sim.settings = e.settings;
     sim.bandTransitions = e.bandTransitions;
-    sim.songDuration = () => Math.min(this.data.duration, this.app.songLength() || this.data.duration);
+    sim.songDuration = () => Math.min(this.data.duration + this.app.trackStart, this.app.songLength() || this.data.duration);
     sim.isAdvancing = () => true;
     const g = this.app.tempo;
     // The grid in use; with the live clock chosen, unplayed parts still
@@ -441,6 +444,10 @@ class FastPass {
   }
 
   // ---- helpers ------------------------------------------------------------
+
+  static silence() {
+    return { rms: 0, bass: 0, mid: 0, high: 0, spectrum: new Array(SessionRecord.BINS).fill(0), bpm: 0, isActive: false };
+  }
 
   static rng(seed) {
     let s = seed >>> 0;

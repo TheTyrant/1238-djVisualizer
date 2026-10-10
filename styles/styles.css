@@ -517,6 +517,7 @@ input[type="range"]::-webkit-slider-runnable-track { height: 2px; background: va
 input[type="range"]::-moz-range-track { height: 2px; background: var(--ink); }
 input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
+  appearance: none;
   width: 10px;
   height: 16px;
   margin-top: -7px;
@@ -923,7 +924,7 @@ select option:disabled { color: var(--ink-3); }
 /* Rows: ruler 28 / master 72 / clips 64 (must match TimelinePanel.ROWS) */
 .editor-main {
   display: grid;
-  grid-template-columns: 112px 1fr;
+  grid-template-columns: 136px 1fr;
   grid-template-rows: auto 1fr;
   min-width: 0;
   min-height: 0;
@@ -943,7 +944,7 @@ select option:disabled { color: var(--ink-3); }
 .ch-clips { height: 64px; border-bottom: 1px solid var(--line); }
 .ch-voice { height: 40px; border-bottom: 1px solid var(--line); }
 .ch-clips:has(+ .ch-voice:not([hidden])) { border-bottom: 1px solid var(--hair); }
-.ch-bin { background: var(--panel); border-right: 1px solid var(--line); border-bottom: none; justify-content: flex-start; padding-top: 10px; }
+.ch-bin { background: var(--panel); border-right: .5px solid var(--line); border-bottom: none; justify-content: flex-start; padding-top: 10px; }
 .ch-name { font-weight: 800; font-size: 12px; text-transform: uppercase; }
 .ch-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
 /* Track mute (D-49) */
@@ -1101,8 +1102,9 @@ select option:disabled { color: var(--ink-3); }
   font-family: var(--font-mono);
   font-weight: 700;
   -moz-appearance: textfield;
+  appearance: textfield;
 }
-.stepper input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.stepper input::-webkit-inner-spin-button { -webkit-appearance: none; appearance: none; }
 .seg-units button, .seg-quick button { font-size: 10px; padding: 0 2px; letter-spacing: 0.02em; }
 
 .prop-readout {
@@ -1338,10 +1340,10 @@ button.bin-dur.is-set { background: var(--ink); color: var(--paper); }
 /* Drawers (D-96): the shelf is split between them, nothing scrolls. */
 .editor-main { position: relative; grid-template-rows: auto var(--bin-h, 150px); overflow: hidden; }
 .tl-area {
-  grid-column: 1 / -1; display: grid; grid-template-columns: 112px 1fr;
+  grid-column: 1 / -1; display: grid; grid-template-columns: 136px 1fr;
   position: relative; min-height: 0; overflow: visible;
 }
-.lane-grips { position: absolute; left: 112px; right: 0; top: 0; height: 0; z-index: 4; }
+.lane-grips { position: absolute; left: 136px; right: 0; top: 0; height: 0; z-index: 4; }
 /* Divider between two drawers: a 1 px white line, a pill in the middle */
 .drawer-div { position: absolute; left: 0; right: 0; height: 11px; margin-top: -5px; cursor: row-resize; touch-action: none; }
 .drawer-div::before { content: ""; position: absolute; left: 0; right: 0; top: 5px; height: 1px; background: rgba(255, 255, 255, 0.85); }
@@ -1508,3 +1510,15 @@ body.clean-view .main-content { grid-column: 1 / -1; grid-row: 1 / -1; }
 .len-pop { width: 300px; }
 .len-pop input[type="range"] { width: 100%; }
 .clip-bin .bin-card { color: var(--ink); }   /* cards keep their own colours on the dark drawer */
+
+/* Master header: Start [mm:ss] · length, then the source with its light (D-99) */
+.ch-start { display: flex; align-items: center; gap: 4px; margin-top: 3px; }
+.ch-start[hidden] { display: none; }
+.ch-k { font: 500 9px var(--font-mono); color: var(--ink-3); }
+.ch-start .ch-time { margin-top: 0; align-self: center; }
+.ch-start-in { width: 46px; text-align: center; cursor: text; }
+.ch-start-in:focus { outline: 1px solid var(--high); outline-offset: 0; background: var(--paper); }
+.ch-src { display: flex; align-items: center; gap: 5px; min-width: 0; margin-top: 3px; }
+.ch-src .ch-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.ch-src .activity-light { width: 7px; height: 7px; }
+#timelineCanvas.grabbing { cursor: grabbing; }

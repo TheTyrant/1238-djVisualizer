@@ -34,8 +34,8 @@ const r = await E(async () => {
   const cr = djApp.text.windowOf(djApp.text.get(window.__creditsId));
   return { len: djApp.songLength(), label: document.getElementById('masterLength').textContent, lastEnd: +edl[edl.length - 1].end.toFixed(2), after: edl.filter(s => s.start >= 40).length, cta: cta && [+cta.start.toFixed(2), +cta.end.toFixed(2)], credits: cr && [+cr[0].toFixed(2), +cr[1].toFixed(2)], plan: djApp.renderer.plan().duration, fade: (() => { djApp.setMasterFade('out', { on: true, len: 2, unit: 's', shape: 'linear' }); const v2 = [djApp.masterFadeLevel(39), djApp.masterFadeLevel(40)]; djApp.setMasterFade('out', { on: false }); return v2; })() };
 });
-ok('the Master label shows the track\'s time', label0 === '01:00', label0);
-ok('set to 0:40: cuts, the CTA and end-locked credits end at 0:40; the export is 40 s; fades end there', r.len === 40 && /00:40/.test(r.label) && r.lastEnd === 40 && r.after === 0 && r.cta[1] === 40 && r.credits[1] === 40 && r.plan === 40 && r.fade[0] === 0.5 && r.fade[1] === 0, JSON.stringify(r));
+ok('the Master label shows the track\'s time', label0 === '1:00', label0);
+ok('set to 0:40: cuts, the CTA and end-locked credits end at 0:40; the export is 40 s; fades end there', r.len === 40 && /^0:40/.test(r.label) && r.lastEnd === 40 && r.after === 0 && r.cta[1] === 40 && r.credits[1] === 40 && r.plan === 40 && r.fade[0] === 0.5 && r.fade[1] === 0, JSON.stringify(r));
 const lo = await E(() => { djApp.setTrackLength(10); return djApp.songLength(); });
 ok('it can\'t go below 30 s', lo === 30, String(lo));
 const play = await E(async () => { djApp.seekMaster(28.5); await djApp.toggleAudio(); await new Promise(r2 => setTimeout(r2, 2500)); return { playing: djApp.trackSource.isPlaying, t: +djApp.masterTime().toFixed(2) }; });

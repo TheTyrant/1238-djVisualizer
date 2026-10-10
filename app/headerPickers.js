@@ -130,5 +130,8 @@ class HeaderPickers {
     const active = this.app.timelineRolling() && !!(viz.audioData && viz.audioData.isActive);
     this.light.classList.toggle('on', active);
     this.light.classList.toggle('beat', active && viz.beatFlash > 0.4);
+    // The same light on the Master lane's source line (D-99).
+    if (this.masterLight === undefined) this.masterLight = document.getElementById('masterLight');
+    if (this.masterLight) { this.masterLight.classList.toggle('on', active); this.masterLight.classList.toggle('beat', active && viz.beatFlash > 0.4); }
   }
 }

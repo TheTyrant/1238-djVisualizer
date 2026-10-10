@@ -655,6 +655,25 @@ The brief's four questions were not answered before the build. Rather than guess
 - The dialog sits near the top of the window so it doesn't move as the list grows or shrinks.
 - Tested (`tests/clipmodel.js` §5b).
 
+### D-99 · Control track start *(Accepted — built; Omar, 2026-10-10)*
+- **Decision:** the control track (the Master lane's music) can start later than 0:00. The Master header reads **Master F M** / **Start [00:00] · length** / **(●) source**: the activity light from the header's SRC readout, then the track name, or "Live Session" in live mode. The object stays named Master in the code.
+- **Two ways to move it:**
+  - **Start box (exact):** type `0:08`, `1:05.5` or `8` and press Enter; Esc reverts.
+  - **Grab and drop (by feel):** double-click the Master lane to pick the music up (the playback pauses), move, then click to drop. It moves by **whole bars** (Alt = free) and Esc cancels. A double-click anywhere else still fits the view.
+- Click-and-drag selection on the ruler is unchanged.
+- **Before the start** (Omar's pick): the fast pass cuts clips on the tempo grid, extended back from the music, with silent analysis frames. The voice and the clips' own sound play; there is no music. During playback a pre-roll clock runs with the audio element paused, and the music starts from 0 at the start (a late timer starts it that much in, so it doesn't drift).
+- **What moves with it:**
+  - the grid, with `TempoGrid.offset` and `detected` shifted by the same amount (snapping by bars keeps the phase);
+  - the waveform, with a START line and a shaded pre-roll;
+  - the master fades, which run from the music's start to the song's end;
+  - the export, with the track mixed at `at: trackStart`;
+  - the song's end, which is start + music length.
+- **Length (D-97):** the length readout sits on the Start line and now means the music's length (30 s at least). The song ends at start + length.
+- **Saved and loaded:** saved as `trackStart`. Older projects and new tracks start at 0:00. Up to 10 min (`TrackSource.MAX_START`).
+- `app/audioProcessor.js` is untouched: the offset lives in `TrackSource` (`lead`, `currentTime` / `duration` in timeline time, `fileDuration` for the file).
+- **Header width:** the channel column is 136 px (was 112) so the Start line fits, and both times read as m:ss (m:ss.s off the second).
+- Tested (`tests/trackstart.js`, 11 checks).
+
 ## I. Known carry-overs (pre-existing on `main`, not changed)
 - Placeholder text drawn with `p.text()` in WebGL mode doesn't render, because no font is loaded (affects the Media Layers "Upload images…" prompt). v2 uses a DOM overlay for its own hints.
 - `visualizer.js` has duplicate `drawAudioWaves` / `drawMandala` / `drawTunnel` definitions (the later ones win), plus unused snake-game code.

@@ -4,7 +4,14 @@
 // nodes onto the processor instance, and starts processor.updateAudioData().
 // From there bandEnergy() / detectBeat() / onDataUpdate run exactly as they
 // do for live input, so band levels and BPM are computed by the same code.
+//
+// Start (D-99): the music can start later than 0:00 on the timeline. Times
+// here (currentTime, duration, seek) are timeline times; before the start a
+// pre-roll clock runs with the element paused (the analyser hears silence)
+// and the element starts from 0 when the clock reaches the start.
 class TrackSource {
+  static MAX_START = 600;   // the music can start up to 10 min in (D-99)
+
   constructor(audioProcessor) {
     this.processor = audioProcessor;
     this.audio = null;      // HTMLAudioElement for the loaded track
@@ -12,12 +19,21 @@ class TrackSource {
     this.file = null;
     this.musicGain = null;  // created per load (the AudioContext is recreated each time)
     this.musicLevel = 1;    // last level asked for; survives reloads
+    this.lead = 0;          // timeline seconds before the music starts (D-99)
+    this.pre = null;        // pre-roll position while before the start: { t, at } (at = performance.now() while running, else null)
+    this.preTimer = null;
   }
 
   get isLoaded() { return !!this.audio; }
-  get isPlaying() { return !!this.audio && !this.audio.paused && !this.audio.ended; }
-  get currentTime() { return this.audio ? this.audio.currentTime : 0; }
-  get duration() { return this.audio && isFinite(this.audio.duration) ? this.audio.duration : 0; }
+  get isPlaying() { return !!this.audio && (!!(this.pre && this.pre.at != null) || (!this.audio.paused && !this.audio.ended)); }
+  get currentTime() {
+    if (!this.audio) return 0;
+    if (this.pre) return Math.min(this.lead, this.pre.t + (this.pre.at != null ? (performance.now() - this.pre.at) / 1000 : 0));
+    return this.lead + this.audio.currentTime;
+  }
+  // The file's own length, and the timeline's (start + file).
+  get fileDuration() { return this.audio && isFinite(this.audio.duration) ? this.audio.duration : 0; }
+  get duration() { return this.fileDuration ? this.lead + this.fileDuration : 0; }
 
   async load(file) {
     this.unload();
@@ -73,6 +89,7 @@ class TrackSource {
     this.audio = audio;
     this.url = url;
     this.file = file;
+    this.pre = this.lead > 0 ? { t: 0, at: null } : null;
     return audio;
   }
 
@@ -89,17 +106,71 @@ class TrackSource {
   }
 
   // A play interrupted by a pause (quick play / stop) is not an error.
-  play() { return this.audio ? this.audio.play().catch((e) => { if (!e || e.name !== 'AbortError') throw e; }) : Promise.resolve(); }
-  pause() { if (this.audio) this.audio.pause(); }
+  play() {
+    if (!this.audio) return Promise.resolve();
+    if (this.pre) { this.runPre(); return Promise.resolve(); }
+    return this.audio.play().catch((e) => { if (!e || e.name !== 'AbortError') throw e; });
+  }
+  pause() {
+    if (this.pre && this.pre.at != null) this.pre = { t: this.currentTime, at: null };
+    clearTimeout(this.preTimer);
+    this.preTimer = null;
+    if (this.audio) this.audio.pause();
+  }
   seek(seconds) {
     if (!this.audio) return;
-    this.audio.currentTime = Math.max(0, Math.min(this.duration, seconds));
+    const playing = this.isPlaying, t = Math.max(0, Math.min(this.duration || seconds, seconds));
+    clearTimeout(this.preTimer);
+    this.preTimer = null;
+    if (t < this.lead) {
+      this.audio.pause();
+      this.audio.currentTime = 0;
+      this.pre = { t, at: null };
+      if (playing) this.runPre();
+    } else {
+      const wasPre = !!this.pre;
+      this.pre = null;
+      this.audio.currentTime = Math.min(this.fileDuration, t - this.lead);
+      if (playing && wasPre) this.play();
+    }
+  }
+
+  // Pre-roll: run the clock to the start, then the music plays from 0
+  // (late timers start it that much in, so it never drifts).
+  runPre() {
+    const p = this.pre;
+    if (!p) return;
+    if (p.at == null) p.at = performance.now();
+    clearTimeout(this.preTimer);
+    const ms = Math.max(0, (this.lead - p.t) * 1000 - (performance.now() - p.at));
+    this.preTimer = setTimeout(() => {
+      this.preTimer = null;
+      if (!this.pre || this.pre.at == null || !this.audio) return;
+      const over = Math.max(0, (this.pre.t + (performance.now() - this.pre.at) / 1000) - this.lead);
+      this.pre = null;
+      this.audio.currentTime = Math.min(this.fileDuration, over);
+      this.audio.play().catch((e) => { if (!e || e.name !== 'AbortError') throw e; });
+    }, ms);
+  }
+
+  // Move the music's start; the playhead keeps its timeline time.
+  setLead(sec) {
+    const t = this.currentTime, playing = this.isPlaying;
+    this.pause();
+    this.lead = Math.max(0, sec || 0);
+    if (!this.audio) return;
+    this.pre = this.lead > 0 ? { t: 0, at: null } : null;   // seek() decides
+    this.seek(t);
+    if (playing) this.play();
   }
 
   // Tears down playback. processor.stop() closes the AudioContext and resets
   // the analysis state; it doesn't know about the <audio> element, so that
   // part is cleaned up here.
   unload() {
+    clearTimeout(this.preTimer);
+    this.preTimer = null;
+    this.pre = null;
     if (this.audio) {
       this.audio.pause();
       this.audio.removeAttribute('src');
