@@ -56,6 +56,7 @@ tests/
   fastpass.js              Step 1: fast pass, tempo grid, ×2/÷2/type-in, played-wins, refill, cancel, never-played export
   workspace.js             Step 3: card contrast, band strip = cut list, member tags, handles + reset + remembered, AE panel, group by band
   tracklength.js           Master track length: label, 30 s floor, cuts / CTA / credits / export follow, playback stops, saved
+  everything.js            Step 7: one project with every v2.4 feature; export checked against the session (cuts, title, over, CTA, sound), save / reopen
   trackstart.js            Control track start: Start box, pre-roll cuts on the grid, playback across the start, export at the start, fades, grab / drop / Alt / Esc, saved, new track resets
   shelves.js               Repeats (images + videos), shelves as menu lists, fold memory, Ctrl+Space clean view
   timeline.js              Step 6: ruler select / Shift / Esc, scrub keeps the cut list, L loop, master fades, 8-bar Selection export with edge fades

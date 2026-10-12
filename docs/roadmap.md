@@ -132,19 +132,22 @@ Supersedes parts of the v2.1 layout (the v2.1 table below describes it as it was
 
 ---
 
-## v2.4 — Stable prep: BSSMNT-Stable05 🟡 *(Omar's brief, due 2026-10-09; decisions section L)*
+## v2.4 — Stable prep: BSSMNT-Stable05 ✅ *(Omar's brief, due 2026-10-09; built and verified 2026-10-12; decisions section L, D-79–D-100)*
 
 **Goal:** easier to get a *planned* result from random actions, and see what's going on under the hood (which clip, which band, why). Installs beside the alpha as **BSSMNT Stable05** (D-79).
 
 | Step | What |
 |---|---|
 | 1 ✅ | **Fast pass + fixed tempo grid** (D-80, D-81): whole song analysed on load through the frozen processor; unplayed parts get motion and cuts; cuts on one grid from 0:00; TEMPO readout with ÷2 ×2, type-in, tap, live clock |
-| 2 ✅ | **Clip model** (D-82): amount used, bar-marker sections as child cards, speed ¼–4× (pitch follows), Fit to bars |
+| 2 ✅ | **Clip model** (D-82): amount used, bar-marker sections (a strip on the clip's card, A / B decks; Slice every ½–16 bars, D-98; a section as its own clip, D-100), speed ¼–4× (pitch follows), Fit to bars |
 | 3 ✅ | **Workspace** (D-83–D-86): band-coloured cards, resizable lanes, compact band strip, AE panel (Global edit, Band members, group by band) |
 | 4 ✅ | **Placement model + over stream** (D-87–D-89): shared placement for layers, images and titles; images over video; title locks, safe areas and trend presets |
 | 5 ✅ | **Per-clip visual mode** (D-90): Replace / Over on a transparent layer, None / Trail / Solid, tint; Mandala batched (2.5× real time at 1080p) |
 | 6 ✅ | **Timeline** (D-91, D-92): select / scrub / loop a range, Selection export with edge fades, master fade in / out |
-| 7 | **Verify, docs, build** `BSSMNT-Stable05-win-x64*` |
+| 6b ✅ | **Omar's rounds** (2026-10-08 / 10): repeats (D-93), Ctrl+Space clean view (D-94), shelves like 01 File (D-95), bottom shelf as drawers (D-96), master track length (D-97), slicer (D-98), control track start (D-99), wide cards + own-clip sections (D-100) |
+| 7 ✅ | **Verify, docs, build** `BSSMNT-Stable05-win-x64*`: every suite green; `tests/everything.js`, one project with every feature on, export checked against the session (cuts, title, over image, CTA, sound, save / reopen); README, help, codemap; installer, portable and zip in `releases/BSSMNT-Stable05/` (offline, not on GitHub) |
+
+**Not built in v2.4:** the pop-out output window still doesn't show the Clip Auto-Editor (use F or Ctrl+Space). Open questions: the *Proposed — needs Omar* notes inside D-80–D-93.
 
 ---
 

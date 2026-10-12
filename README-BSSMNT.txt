@@ -56,17 +56,40 @@ CONTROLS AT A GLANCE
 --------------------
 Top bar      SRC (Live / Track) · MODE (visual mode) · SIZE (frame shape:
              Original, 16:9, 9:16, 1:1) · half-moon = dark / light skin · ?
-Timeline     Play / pause, stop, back to start. Click the ruler to jump.
-             M on Master / Voice mutes that track (muted = left out of
-             exports). Drag text blocks on the Text lane to retime them.
+Timeline     Play / pause, stop, back to start. Click a lane to jump; drag
+             on the ruler to select a range (L loops it, Export can render
+             just the selection). M on Master / Voice mutes that track
+             (muted = left out of exports). F on Master: fade in / out.
+             Drag text blocks on the Text lane to retime them.
+Master       Start [0:00]: where the music starts. Type a time, or
+             double-click the Master lane, move, click to drop (snaps to
+             bars, Alt = free, Esc cancels). Before it the clips still cut
+             on the beat and the voice plays. The time beside Start is the
+             music's length: click it to shorten the song (30 s at least).
+Drawers      Master, Clips, Voice, Text and Action clips share the bottom
+             shelf. Drag the white line (pill in the middle) between two
+             to resize them; the main divider resizes them all evenly.
 Action       The clip stack: drag to reorder. Top = most important (shown
-Editor       most often).
+clips        most often). Cards are coloured by their band. A clip with
+             sections shows them as a strip on its card (click one to edit
+             it); the card grows when there are many.
 01 File      New project · Open… · Open recent · Save (+ Pack / Link and the
              file size) · Save as… · Export video (options in dropdowns) ·
              Output window (pop-out for a projector).
 03 Sound     EQ (Sensitivity / Dynamic), the asset list, and the selected
-             asset's options: Pace (how long it holds), Position lock
-             (Hook / Result / CTA, three in total) with Auto fade music.
+             asset's options: Pace (how long it holds), Repeats (how many
+             times it may appear, 0 = no limit), Position lock (Hook /
+             Result / CTA, three in total) with Auto fade music, the
+             amount used, Speed (¼–4×), Fit to bars, a visual mode of its
+             own, and where it sits on screen (images can play Over video).
+Sections     On a video's card, Sections opens the slicer: Slice every
+             1/2 · 1 · 4 · 8 · 16 bars cuts it for you; click to add a
+             marker, drag to move, × or right-click to delete, select one
+             and press Delete or ←/→, Ctrl+Z undoes. A section can be made
+             its own clip (↗) with its own card; ↩ Back puts it back.
+TEMPO        The song is analysed when it loads and cuts follow one beat
+             grid from 0:00. If the tempo is off: ÷2, ×2, type it, or tap
+             T; Live clock goes back to the alpha's behaviour.
 04 Effects   Add title, Add credits, Add text; every option is a dropdown.
              Lock to Start / At time / End.
              Drag the dashed box on screen to place text. Layout can
@@ -75,14 +98,18 @@ Live mode    "Record input for export" keeps the sound of a live set for
              the export (untested in real-world use).
 
 
-GOOD TO KNOW (alpha)
---------------------
+GOOD TO KNOW
+------------
 - Windows may say "Windows protected your PC": click More info → Run anyway
   (the app isn't code-signed yet).
-- The tempo detector misreads some songs; cuts follow what it detects.
-- Parts of the song you haven't played export as a still picture.
+- Stable05 installs beside the alpha with its own settings. Projects saved
+  in Stable05 don't open in the alpha; the first Save over an alpha
+  project offers to save a copy instead.
+- The whole song is analysed when it loads, so parts you haven't played
+  still get cuts and motion in the export. If the detected tempo is off,
+  fix it in TEMPO (÷2, ×2, type, tap).
 - The pop-out output window doesn't show the Clip Auto-Editor yet — use
-  Fullscreen (F) instead.
+  Fullscreen (F) or Ctrl+Space instead.
 - Closing with unsaved changes asks before closing.
 
 LICENCE AND CREDITS
